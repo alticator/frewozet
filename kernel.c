@@ -1,8 +1,8 @@
 #include <stdint.h>
 
 void kmain(void) {
-    volatile uint16_t* vga = (uint16_t*)0xB8000;
-    const char* msg = "Hello, World!";
+    volatile uint16_t* const vga = (volatile uint16_t*)0xB8000;
+    const char msg[] = "Hello, World!";
 
     vga[3] = 0x074B;   // 'K'
 

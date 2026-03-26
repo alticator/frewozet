@@ -20,10 +20,9 @@ start:
 
     mov [boot_drive], dl
 
-    ; write 'A' to top-left in text mode
     mov ax, 0xB800
     mov gs, ax
-    mov word [gs:0], 0x0741
+    mov word [gs:0], 0x0741      ; A
 
     mov ax, KERNEL_LOAD_SEG
     mov es, ax
@@ -32,13 +31,12 @@ start:
 
 .load_kernel:
     mov ah, 0x02
-    mov al, 1
-    mov ch, 0
-    mov dh, 0
+    mov al, 0x01
+    mov ch, 0x00
+    mov dh, 0x00
 
-    mov ax, si
-    add al, 2
-    mov cl, al
+    mov cx, si
+    add cl, 2
 
     mov dl, [boot_drive]
     int 0x13
@@ -49,11 +47,11 @@ start:
     cmp si, KERNEL_SECTORS
     jl .load_kernel
 
-    ; write 'B' after successful load
     mov ax, 0xB800
     mov gs, ax
-    mov word [gs:2], 0x0742
+    mov word [gs:2], 0x0742      ; B
 
+    cli
     lgdt [gdt_descriptor]
 
     mov eax, cr0
@@ -65,7 +63,7 @@ start:
 disk_error:
     mov ax, 0xB800
     mov gs, ax
-    mov word [gs:4], 0x0745      ; 'E'
+    mov word [gs:4], 0x0745      ; E
 .hang:
     cli
     hlt
@@ -108,9 +106,10 @@ protected_mode:
     mov ss, ax
     mov esp, 0x90000
 
-    mov word [0xB8004], 0x0750      ; 'P'
+    mov word [0xB8004], 0x0750   ; P
 
-    jmp KERNEL_LOAD_ADDR
+    mov eax, KERNEL_LOAD_ADDR
+    jmp eax
 
 times 510-($-$$) db 0
 dw 0xAA55
