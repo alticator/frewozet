@@ -15,11 +15,7 @@ void kmain(void) {
     idt_init();
     terminal_write("  OK\n");
     terminal_write("Frewozet is ready.\n\n");
-    terminal_write("Frewozet >>>");
-
-    __asm__ __volatile__("ud2");
-    
-
+    terminal_write("Frewozet >>>");    
 
     for (;;) {
         __asm__ __volatile__("hlt");
