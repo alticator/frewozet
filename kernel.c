@@ -7,7 +7,7 @@ void kmain(void) {
     vga[3] = 0x074B;   // 'K'
 
     for (int i = 0; msg[i] != '\0'; i++) {
-        vga[i] = ((uint16_t)0x07 << 8) | (uint8_t)msg[i];
+        vga[i+1200] = ((uint16_t)0x07 << 8) | (uint8_t)msg[i];
     }
 
     for (;;) {
