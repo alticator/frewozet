@@ -1,11 +1,11 @@
 BOOT_SRC    = boot.asm
 ENTRY_SRC   = entry.asm
-KERNEL_SRC  = kernel.c
+KERNEL_SRC  = kernel.c terminal.c
 LINKER_SRC  = linker.ld
 
 BOOT_BIN    = boot.bin
 ENTRY_OBJ   = entry.o
-KERNEL_OBJ  = kernel.o
+KERNEL_OBJS = $(KERNEL_SRC:.c=.o)
 KERNEL_ELF  = kernel.elf
 KERNEL_BIN  = kernel.bin
 OS_IMG      = os.img
@@ -20,8 +20,8 @@ SECTOR_SIZE        = 512
 IMG_SECTORS        = 2880
 KERNEL_MAX_SECTORS = 8
 
-CFLAGS = -m32 -march=i386 -ffreestanding -fno-pic -fno-pie -fno-stack-protector -nostdlib -O2 -Wall -Wextra
-LDFLAGS = -m elf_i386 -T linker.ld -nostdlib
+CFLAGS  = -m32 -march=i386 -ffreestanding -fno-pic -fno-pie -fno-stack-protector -fno-asynchronous-unwind-tables -fno-unwind-tables -nostdlib -O2 -Wall -Wextra
+LDFLAGS = -m elf_i386 -T $(LINKER_SRC) -nostdlib
 
 all: $(OS_IMG)
 
@@ -31,11 +31,11 @@ $(BOOT_BIN): $(BOOT_SRC)
 $(ENTRY_OBJ): $(ENTRY_SRC)
 	$(NASM) -f elf32 $(ENTRY_SRC) -o $(ENTRY_OBJ)
 
-$(KERNEL_OBJ): $(KERNEL_SRC)
-	$(CC) $(CFLAGS) -c $(KERNEL_SRC) -o $(KERNEL_OBJ)
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
-$(KERNEL_ELF): $(ENTRY_OBJ) $(KERNEL_OBJ) $(LINKER_SRC)
-	$(LD) $(LDFLAGS) -o $(KERNEL_ELF) $(ENTRY_OBJ) $(KERNEL_OBJ)
+$(KERNEL_ELF): $(ENTRY_OBJ) $(KERNEL_OBJS) $(LINKER_SRC)
+	$(LD) $(LDFLAGS) -o $(KERNEL_ELF) $(ENTRY_OBJ) $(KERNEL_OBJS)
 
 $(KERNEL_BIN): $(KERNEL_ELF)
 	$(OBJCOPY) -O binary $(KERNEL_ELF) $(KERNEL_BIN)
@@ -52,7 +52,7 @@ $(OS_IMG): $(BOOT_BIN) $(KERNEL_BIN)
 	$(DD) if=$(KERNEL_BIN) of=$(OS_IMG) bs=$(SECTOR_SIZE) seek=1 conv=notrunc
 
 run: $(OS_IMG)
-	qemu-system-i386 -drive format=raw,file=$(OS_IMG),if=floppy
+	qemu-system-i386 -fda $(OS_IMG) -boot a
 
 clean:
-	rm -f $(BOOT_BIN) $(ENTRY_OBJ) $(KERNEL_OBJ) $(KERNEL_ELF) $(KERNEL_BIN) $(OS_IMG)
+	rm -f $(BOOT_BIN) $(ENTRY_OBJ) $(KERNEL_OBJS) $(KERNEL_ELF) $(KERNEL_BIN) $(OS_IMG)
