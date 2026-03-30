@@ -8,6 +8,10 @@ SECTIONS
     {
         *(.text.start)
         *(.text*)
+    }
+
+    .rodata : ALIGN(16)
+    {
         *(.rodata*)
     }
 
