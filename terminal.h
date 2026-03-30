@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "ports.h"
 
 void terminal_init(void);
 void terminal_clear(void);

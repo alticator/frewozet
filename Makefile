@@ -1,6 +1,6 @@
 BOOT_SRC    = boot.asm
 ENTRY_SRC   = entry.asm
-KERNEL_SRC  = kernel.c terminal.c
+KERNEL_SRC  = kernel.c terminal.c ports.h
 LINKER_SRC  = linker.ld
 
 BOOT_BIN    = boot.bin
