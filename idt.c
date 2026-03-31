@@ -1,4 +1,8 @@
 #include "idt.h"
+#include "terminal.h"
+#include "pic.h"
+#include "keyboard.h"
+#include <stdint.h>
 
 struct __attribute__((packed)) idt_entry {
     uint16_t offset_low;
@@ -18,43 +22,24 @@ static struct idt_ptr idtp;
 
 extern void idt_load(uint32_t idt_ptr_addr);
 
-extern void isr0(void);
-extern void isr1(void);
-extern void isr2(void);
-extern void isr3(void);
-extern void isr4(void);
-extern void isr5(void);
-extern void isr6(void);
-extern void isr7(void);
-extern void isr8(void);
-extern void isr9(void);
-extern void isr10(void);
-extern void isr11(void);
-extern void isr12(void);
-extern void isr13(void);
-extern void isr14(void);
-extern void isr15(void);
-extern void isr16(void);
-extern void isr17(void);
-extern void isr18(void);
-extern void isr19(void);
-extern void isr20(void);
-extern void isr21(void);
-extern void isr22(void);
-extern void isr23(void);
-extern void isr24(void);
-extern void isr25(void);
-extern void isr26(void);
-extern void isr27(void);
-extern void isr28(void);
-extern void isr29(void);
-extern void isr30(void);
-extern void isr31(void);
+extern void isr0(void);  extern void isr1(void);  extern void isr2(void);  extern void isr3(void);
+extern void isr4(void);  extern void isr5(void);  extern void isr6(void);  extern void isr7(void);
+extern void isr8(void);  extern void isr9(void);  extern void isr10(void); extern void isr11(void);
+extern void isr12(void); extern void isr13(void); extern void isr14(void); extern void isr15(void);
+extern void isr16(void); extern void isr17(void); extern void isr18(void); extern void isr19(void);
+extern void isr20(void); extern void isr21(void); extern void isr22(void); extern void isr23(void);
+extern void isr24(void); extern void isr25(void); extern void isr26(void); extern void isr27(void);
+extern void isr28(void); extern void isr29(void); extern void isr30(void); extern void isr31(void);
+
+extern void irq0(void);  extern void irq1(void);  extern void irq2(void);  extern void irq3(void);
+extern void irq4(void);  extern void irq5(void);  extern void irq6(void);  extern void irq7(void);
+extern void irq8(void);  extern void irq9(void);  extern void irq10(void); extern void irq11(void);
+extern void irq12(void); extern void irq13(void); extern void irq14(void); extern void irq15(void);
 
 static const char* exception_names[32] = {
     "Divide Error",
     "Debug",
-    "Nonmaskable External Interrupt",
+    "Non-maskable Interrupt",
     "Breakpoint",
     "Overflow",
     "Bound Range Exceeded",
@@ -132,20 +117,57 @@ void idt_init(void) {
     idt_set_gate(30, (uint32_t)isr30, 0x08, 0x8E);
     idt_set_gate(31, (uint32_t)isr31, 0x08, 0x8E);
 
+    idt_set_gate(32, (uint32_t)irq0,  0x08, 0x8E);
+    idt_set_gate(33, (uint32_t)irq1,  0x08, 0x8E);
+    idt_set_gate(34, (uint32_t)irq2,  0x08, 0x8E);
+    idt_set_gate(35, (uint32_t)irq3,  0x08, 0x8E);
+    idt_set_gate(36, (uint32_t)irq4,  0x08, 0x8E);
+    idt_set_gate(37, (uint32_t)irq5,  0x08, 0x8E);
+    idt_set_gate(38, (uint32_t)irq6,  0x08, 0x8E);
+    idt_set_gate(39, (uint32_t)irq7,  0x08, 0x8E);
+    idt_set_gate(40, (uint32_t)irq8,  0x08, 0x8E);
+    idt_set_gate(41, (uint32_t)irq9,  0x08, 0x8E);
+    idt_set_gate(42, (uint32_t)irq10, 0x08, 0x8E);
+    idt_set_gate(43, (uint32_t)irq11, 0x08, 0x8E);
+    idt_set_gate(44, (uint32_t)irq12, 0x08, 0x8E);
+    idt_set_gate(45, (uint32_t)irq13, 0x08, 0x8E);
+    idt_set_gate(46, (uint32_t)irq14, 0x08, 0x8E);
+    idt_set_gate(47, (uint32_t)irq15, 0x08, 0x8E);
+
     idtp.limit = (uint16_t)(sizeof(idt) - 1);
     idtp.base = (uint32_t)&idt;
 
     idt_load((uint32_t)&idtp);
 }
 
-void isr_handler(uint32_t interrupt_number) {
-    terminal_write("\nFREWOZET SYSTEM ERROR: ");
-
+void interrupt_handler(uint32_t interrupt_number) {
     if (interrupt_number < 32) {
+        terminal_write("\nFREWOZET SYSTEM ERROR: ");
         terminal_write(exception_names[interrupt_number]);
-    } else {
-        terminal_write("Unknown");
+        terminal_write("\nSystem halted.");
+        for (;;) {
+            __asm__ __volatile__("cli; hlt");
+        }
     }
 
-    terminal_write("\nSystem will now be halted. Restart required.");
+    if (interrupt_number == 32) {
+        static uint32_t ticks = 0;
+        ticks++;
+        if ((ticks % 100) == 0) {
+            terminal_write(".");
+        }
+        pic_send_eoi(0);
+        return;
+    }
+
+    if (interrupt_number == 33) {
+        keyboard_handle();
+        pic_send_eoi(1);
+        return;
+    }
+
+    if (interrupt_number >= 32 && interrupt_number <= 47) {
+        pic_send_eoi((uint8_t)(interrupt_number - 32));
+        return;
+    }
 }

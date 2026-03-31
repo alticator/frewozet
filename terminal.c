@@ -51,15 +51,15 @@ static void terminal_scroll(void) {
     for (int x = 0; x < VGA_WIDTH; x++) {
         buffer[x + (VGA_HEIGHT - 1)*VGA_WIDTH] = vga_char(' ', cursor_color);
     }
-    if (cursor_row > 0) cursor_row--;
 }
 
-void terminal_writechar(char c) {
+static void terminal_writechar_optimized(char c) {
     if (c == '\n') {
         cursor_row++;
         cursor_col = 0;
         if (cursor_row >= VGA_HEIGHT) {
             terminal_scroll();
+            cursor_row = VGA_HEIGHT - 1;
         }
         return;
     }
@@ -67,12 +67,18 @@ void terminal_writechar(char c) {
     cursor_col++;
     if (cursor_col >= VGA_WIDTH) {
         cursor_row++;
+        cursor_col = 0;
     }
+}
+
+void terminal_writechar(char c) {
+    terminal_writechar_optimized(c);
+    terminal_update_cursor();
 }
 
 void terminal_write(const char* str) {
     for (size_t i = 0; str[i] != '\0'; i++) {
-        terminal_writechar(str[i]);
+        terminal_writechar_optimized(str[i]);
     }
     terminal_update_cursor();
 }
