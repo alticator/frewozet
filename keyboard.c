@@ -38,24 +38,22 @@ static void write_hex8(uint8_t v) {
 }
 
 void keyboard_handle(void) {
-    terminal_write("\nKeyboard interrupt received: ");
     uint8_t scancode = inb(0x60);
-    write_hex8(scancode);
-    terminal_write("\n");
-    terminal_write("\nVERY LONG LINE TO TEST SCROLLING. THIS LINE SHOULD CAUSE THE TERMINAL TO SCROLL UP ONCE.\n");
     if (scancode & 0x80) {
-        terminal_write("Key released.\n");
-    } else {
-        terminal_write("Key pressed: ");
-        if (scancode < 128) {
-            char c = keyboard_map[scancode];
-            if (c) {
-                if (c == '\b') {
-                    terminal_write("^H");
-                    return;
-                }
-                terminal_writechar(c);
+        return;
+    }
+    if (scancode < 128) {
+        char c = keyboard_map[scancode];
+        if (c) {
+            if (c == '\b') {
+                terminal_write("^H");
+                return;
             }
+            terminal_writechar(c);
         }
+    } else {
+        terminal_write("< [?] @ 0x");
+        write_hex8(scancode);
+        terminal_write(" >");
     }
 }
