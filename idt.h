@@ -5,6 +5,6 @@
 #include "terminal.h"
 
 void idt_init(void);
-void isr_handler(uint32_t interrupt);
+void interrupt_handler(uint32_t interrupt);
 
 #endif
