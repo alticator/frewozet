@@ -1,7 +1,7 @@
 BOOT_SRC      = boot.asm
 ENTRY_SRC     = entry.asm
 ISR_IRQ_SRC   = isr_irq.asm
-KERNEL_SRC    = kernel.c terminal.c idt.c pic.c keyboard.c shell.c
+KERNEL_SRC    = kernel.c terminal.c idt.c pic.c keyboard.c shell.c calc.c
 LINKER_SRC    = linker.ld
 
 BOOT_BIN      = boot.bin
