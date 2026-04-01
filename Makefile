@@ -1,15 +1,17 @@
 BOOT_SRC      = boot.asm
 ENTRY_SRC     = entry.asm
 ISR_IRQ_SRC   = isr_irq.asm
-KERNEL_SRC    = kernel.c terminal.c idt.c pic.c keyboard.c shell.c calc.c
 LINKER_SRC    = linker.ld
+
+C_SOURCES     = $(filter-out ,$(wildcard *.c))
 
 BOOT_BIN      = boot.bin
 ENTRY_OBJ     = entry.o
 ISR_IRQ_OBJ   = isr_irq.o
-KERNEL_OBJS   = $(KERNEL_SRC:.c=.o)
+KERNEL_OBJS   = $(C_SOURCES:.c=.o)
 KERNEL_ELF    = kernel.elf
 KERNEL_BIN    = kernel.bin
+KERNEL_SECTORS_INC = kernel_sectors.inc
 OS_IMG        = os.img
 
 NASM        = nasm
@@ -20,15 +22,12 @@ DD          = dd
 
 SECTOR_SIZE        = 512
 IMG_SECTORS        = 2880
-KERNEL_MAX_SECTORS = 64
+KERNEL_MAX_SECTORS = 128
 
 CFLAGS  = -m32 -march=i386 -ffreestanding -fno-pic -fno-pie -fno-stack-protector -fno-asynchronous-unwind-tables -fno-unwind-tables -nostdlib -O2 -Wall -Wextra
 LDFLAGS = -m elf_i386 -T $(LINKER_SRC) -nostdlib
 
 all: $(OS_IMG)
-
-$(BOOT_BIN): $(BOOT_SRC)
-	$(NASM) -f bin $(BOOT_SRC) -o $(BOOT_BIN)
 
 $(ENTRY_OBJ): $(ENTRY_SRC)
 	$(NASM) -f elf32 $(ENTRY_SRC) -o $(ENTRY_OBJ)
@@ -51,6 +50,14 @@ $(KERNEL_BIN): $(KERNEL_ELF)
 		exit 1; \
 	fi
 
+$(KERNEL_SECTORS_INC): $(KERNEL_BIN)
+	@size=$$(wc -c < $(KERNEL_BIN)); \
+	sectors=$$(( ($$size + $(SECTOR_SIZE) - 1) / $(SECTOR_SIZE) )); \
+	echo "KERNEL_SECTORS equ $$sectors" > $(KERNEL_SECTORS_INC)
+
+$(BOOT_BIN): $(BOOT_SRC) $(KERNEL_SECTORS_INC)
+	$(NASM) -f bin $(BOOT_SRC) -o $(BOOT_BIN)
+
 $(OS_IMG): $(BOOT_BIN) $(KERNEL_BIN)
 	$(DD) if=/dev/zero of=$(OS_IMG) bs=$(SECTOR_SIZE) count=$(IMG_SECTORS)
 	$(DD) if=$(BOOT_BIN) of=$(OS_IMG) conv=notrunc
@@ -60,4 +67,4 @@ run: $(OS_IMG)
 	qemu-system-i386 -fda $(OS_IMG) -boot a
 
 clean:
-	rm -f $(BOOT_BIN) $(ENTRY_OBJ) $(ISR_IRQ_OBJ) $(KERNEL_OBJS) $(KERNEL_ELF) $(KERNEL_BIN) $(OS_IMG)
+	rm -f $(BOOT_BIN) $(ENTRY_OBJ) $(ISR_IRQ_OBJ) $(KERNEL_OBJS) $(KERNEL_ELF) $(KERNEL_BIN) $(KERNEL_SECTORS_INC) $(OS_IMG)

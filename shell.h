@@ -6,6 +6,7 @@
 
 #include "terminal.h"
 #include "idt.h"
+#include "ports.h"
 #include "calc.h"
 
 void shell_init(void);
