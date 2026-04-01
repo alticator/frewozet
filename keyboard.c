@@ -1,6 +1,7 @@
 #include "keyboard.h"
 #include "terminal.h"
 #include "ports.h"
+#include "shell.h"
 
 #include <stdint.h>
 
@@ -45,11 +46,7 @@ void keyboard_handle(void) {
     if (scancode < 128) {
         char c = keyboard_map[scancode];
         if (c) {
-            if (c == '\b') {
-                terminal_write("^H");
-                return;
-            }
-            terminal_writechar(c);
+            shell_handle_char(c);
         }
     } else {
         terminal_write("< [?] @ 0x");

@@ -10,5 +10,6 @@ void terminal_clear(void);
 void terminal_write(const char* str);
 void terminal_writechar(char c);
 void terminal_color(uint8_t color);
+void terminal_backspace(void);
 
 #endif

@@ -1,7 +1,7 @@
 BOOT_SRC      = boot.asm
 ENTRY_SRC     = entry.asm
 ISR_IRQ_SRC   = isr_irq.asm
-KERNEL_SRC    = kernel.c terminal.c idt.c pic.c keyboard.c
+KERNEL_SRC    = kernel.c terminal.c idt.c pic.c keyboard.c shell.c
 LINKER_SRC    = linker.ld
 
 BOOT_BIN      = boot.bin
@@ -20,7 +20,7 @@ DD          = dd
 
 SECTOR_SIZE        = 512
 IMG_SECTORS        = 2880
-KERNEL_MAX_SECTORS = 32
+KERNEL_MAX_SECTORS = 64
 
 CFLAGS  = -m32 -march=i386 -ffreestanding -fno-pic -fno-pie -fno-stack-protector -fno-asynchronous-unwind-tables -fno-unwind-tables -nostdlib -O2 -Wall -Wextra
 LDFLAGS = -m elf_i386 -T $(LINKER_SRC) -nostdlib
