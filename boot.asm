@@ -3,7 +3,8 @@ bits 16
 
 KERNEL_LOAD_SEG  equ 0x1000
 KERNEL_LOAD_ADDR equ 0x10000
-KERNEL_SECTORS   equ 64
+
+%include "kernel_sectors.inc"
 
 SECTORS_PER_TRACK equ 18
 HEADS_PER_CYLINDER equ 2
