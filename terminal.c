@@ -71,6 +71,17 @@ static void terminal_writechar_optimized(char c) {
     }
 }
 
+void terminal_backspace(void) {
+    if (cursor_col > 0) {
+        cursor_col--;
+    } else if (cursor_row > 0) {
+        cursor_row--;
+        cursor_col = VGA_WIDTH - 1;
+    }
+    buffer[cursor_col + cursor_row*VGA_WIDTH] = vga_char(' ', cursor_color);
+    terminal_update_cursor();
+}
+
 void terminal_writechar(char c) {
     terminal_writechar_optimized(c);
     terminal_update_cursor();

@@ -20,6 +20,8 @@ struct __attribute__((packed)) idt_ptr {
 static struct idt_entry idt[256];
 static struct idt_ptr idtp;
 
+static uint32_t timer_ticks = 0;
+
 extern void idt_load(uint32_t idt_ptr_addr);
 
 extern void isr0(void);  extern void isr1(void);  extern void isr2(void);  extern void isr3(void);
@@ -151,10 +153,10 @@ void interrupt_handler(uint32_t interrupt_number) {
     }
 
     if (interrupt_number == 32) {
-        static uint32_t ticks = 0;
-        ticks++;
-        if ((ticks % 100) == 0) {
-            terminal_write(".");
+        if (timer_ticks < UINT32_MAX) {
+            timer_ticks++;
+        } else {
+            timer_ticks = 0x00000000; // Wrap around to prevent overflow
         }
         pic_send_eoi(0);
         return;
@@ -170,4 +172,8 @@ void interrupt_handler(uint32_t interrupt_number) {
         pic_send_eoi((uint8_t)(interrupt_number - 32));
         return;
     }
+}
+
+uint32_t get_timer_ticks(void) {
+    return timer_ticks;
 }

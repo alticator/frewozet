@@ -1,13 +1,14 @@
 #include "keyboard.h"
 #include "terminal.h"
 #include "ports.h"
+#include "shell.h"
 
 #include <stdint.h>
 
 static const char keyboard_map[128] = {
     0,
     27,
-    '1','2','3','4','5','6','7','8','9','0','-','=',
+    '1','2','3','4','5','6','7','8','9','0','-','+',
     '\b',
     '\t',
     'q','w','e','r','t','y','u','i','o','p','[',']',
@@ -16,7 +17,7 @@ static const char keyboard_map[128] = {
     'a','s','d','f','g','h','j','k','l',';','\'','`',
     0,
     '\\',
-    'z','x','c','v','b','n','m',',','.','/',
+    'z','x','c','v','b','n','m','.','*','/',
     0,
     '*',
     0,
@@ -45,11 +46,7 @@ void keyboard_handle(void) {
     if (scancode < 128) {
         char c = keyboard_map[scancode];
         if (c) {
-            if (c == '\b') {
-                terminal_write("^H");
-                return;
-            }
-            terminal_writechar(c);
+            shell_handle_char(c);
         }
     } else {
         terminal_write("< [?] @ 0x");
