@@ -3,7 +3,10 @@ bits 16
 
 KERNEL_LOAD_SEG  equ 0x1000
 KERNEL_LOAD_ADDR equ 0x10000
-KERNEL_SECTORS   equ 17
+KERNEL_SECTORS   equ 64
+
+SECTORS_PER_TRACK equ 18
+HEADS_PER_CYLINDER equ 2
 
 CODE_SEL equ 0x08
 DATA_SEL equ 0x10
@@ -20,36 +23,61 @@ start:
 
     mov [boot_drive], dl
 
+    ; debug: A
     mov ax, 0xB800
     mov gs, ax
-    mov word [gs:0], 0x0741      ; A
+    mov word [gs:0], 0x0741
 
+    ; load kernel to 0x1000:0000 = physical 0x10000
     mov ax, KERNEL_LOAD_SEG
     mov es, ax
     xor bx, bx
-    xor si, si
 
-.load_kernel:
-    mov ah, 0x02
-    mov al, 0x01
-    mov ch, 0x00
-    mov dh, 0x00
+    ; first kernel sector is right after boot sector:
+    ; cylinder 0, head 0, sector 2
+    mov byte [curr_sector], 2
+    mov byte [curr_head], 0
+    mov byte [curr_cylinder], 0
+    mov word [sectors_left], KERNEL_SECTORS
 
-    mov cx, si
-    add cl, 2
+load_kernel:
+    cmp word [sectors_left], 0
+    je load_done
 
+    mov ah, 0x02          ; BIOS read sectors
+    mov al, 0x01          ; read 1 sector
+    mov ch, [curr_cylinder]
+    mov cl, [curr_sector]
+    mov dh, [curr_head]
     mov dl, [boot_drive]
+
     int 0x13
     jc disk_error
 
     add bx, 512
-    inc si
-    cmp si, KERNEL_SECTORS
-    jl .load_kernel
+    dec word [sectors_left]
 
+    ; advance CHS
+    inc byte [curr_sector]
+    cmp byte [curr_sector], SECTORS_PER_TRACK + 1
+    jne load_kernel
+
+    ; wrap sector, advance head
+    mov byte [curr_sector], 1
+    inc byte [curr_head]
+    cmp byte [curr_head], HEADS_PER_CYLINDER
+    jne load_kernel
+
+    ; wrap head, advance cylinder
+    mov byte [curr_head], 0
+    inc byte [curr_cylinder]
+    jmp load_kernel
+
+load_done:
+    ; debug: B
     mov ax, 0xB800
     mov gs, ax
-    mov word [gs:2], 0x0742      ; B
+    mov word [gs:2], 0x0742
 
     cli
     lgdt [gdt_descriptor]
@@ -61,15 +89,21 @@ start:
     jmp CODE_SEL:protected_mode
 
 disk_error:
+    ; debug: E
     mov ax, 0xB800
     mov gs, ax
-    mov word [gs:4], 0x0745      ; E
+    mov word [gs:4], 0x0745
+
 .hang:
     cli
     hlt
     jmp .hang
 
-boot_drive db 0
+boot_drive    db 0
+curr_sector   db 0
+curr_head     db 0
+curr_cylinder db 0
+sectors_left  dw 0
 
 gdt_start:
     dq 0
@@ -106,7 +140,8 @@ protected_mode:
     mov ss, ax
     mov esp, 0x90000
 
-    mov word [0xB8004], 0x0750   ; P
+    ; debug: P
+    mov word [0xB8004], 0x0750
 
     mov eax, KERNEL_LOAD_ADDR
     jmp eax
