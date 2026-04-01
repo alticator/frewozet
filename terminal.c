@@ -8,10 +8,19 @@ static size_t cursor_row;
 static size_t cursor_col;
 static uint8_t cursor_color;
 static volatile uint16_t* buffer;
+static int color_mode = 0;
 
 static inline uint16_t vga_char(unsigned char c, uint8_t color) {
     return ((uint16_t)color << 8) | (uint16_t)c;
 
+}
+
+int terminal_get_color_mode() {
+    return color_mode;
+}
+
+void terminal_set_color_mode(int mode) {
+    color_mode = mode;
 }
 
 void terminal_clear() {
@@ -42,6 +51,10 @@ static void terminal_update_cursor(void) {
     outb(0x3D5, (uint8_t)((pos >> 8) & 0xFF));
 }
 
+void terminal_color(uint8_t color) {
+    cursor_color = color;
+}
+
 static void terminal_scroll(void) {
     for (int y = 1; y < VGA_HEIGHT; y++) {
         for (int x = 0; x < VGA_WIDTH; x++) {
@@ -51,6 +64,84 @@ static void terminal_scroll(void) {
     for (int x = 0; x < VGA_WIDTH; x++) {
         buffer[x + (VGA_HEIGHT - 1)*VGA_WIDTH] = vga_char(' ', cursor_color);
     }
+}
+
+void terminal_write_uint(uint32_t value) {
+    char buffer[32];
+    int length = 0;
+    if (value == 0) {
+        buffer[length++] = '0';
+    } else {
+        uint32_t temp = value;
+        while (temp > 0) {
+            buffer[length++] = '0' + (temp % 10);
+            temp /= 10;
+        }
+        for (int i = 0; i < length / 2; i++) {
+            char tmp = buffer[i];
+            buffer[i] = buffer[length - 1 - i];
+            buffer[length - 1 - i] = tmp;
+        }
+    }
+    buffer[length] = '\0';
+    terminal_write(buffer);
+}
+
+void terminal_write_hex_digit(uint8_t v) {
+    if (v < 10) {
+        terminal_writechar('0' + v);
+    } else {
+        terminal_writechar('A' + (v - 10));
+    }
+}
+
+void terminal_write_hex8(uint8_t v) {
+    terminal_write_hex_digit((v >> 4) & 0x0F);
+    terminal_write_hex_digit(v & 0x0F);
+}
+
+static uint8_t get_colorshell_color(const char* type) {
+    if (strings_equal(type, "info")) {
+        return 0x0B; // Light cyan
+    } else if (strings_equal(type, "warning")) {
+        return 0x0E; // Yellow
+    } else if (strings_equal(type, "error")) {
+        return 0x0C; // Light red
+    } else if (strings_equal(type, "success")) {
+        return 0x0A; // Light green
+    } else if (strings_equal(type, "prompt")) {
+        return 0x0A; // Light green for prompts
+    } else if (strings_equal(type, "command")) {
+        return 0x0B; // Light cyan for commands
+    } else if (strings_equal(type, "output")) {
+        return 0x0F; // Bright white for command output
+    } else {
+        return 0x07; // Default gray
+    }
+}
+
+void colorshell_write(const char* str, const char* type) {
+    if (!color_mode) {
+        terminal_write(str);
+        return;
+    }
+    uint8_t color = get_colorshell_color(type);
+    uint8_t previous_color = cursor_color;
+    terminal_color(color);
+    terminal_write(str);
+    terminal_color(previous_color);
+}
+
+void colorshell_write_uint(uint32_t value, const char* type) {
+    if (!color_mode) {
+        terminal_write_uint(value);
+        return;
+    }
+    uint8_t color = get_colorshell_color(type);
+    uint8_t previous_color = cursor_color;
+    terminal_color(color);
+    terminal_write_uint(value);
+    terminal_color(previous_color);
 }
 
 static void terminal_writechar_optimized(char c) {

@@ -5,45 +5,25 @@
 static char shell_buffer[SHELL_BUFFER_SIZE];
 static size_t shell_buffer_length = 0;
 
-static int strings_equal(const char* a, const char* b) {
-    size_t i = 0;
-    while (a[i] != '\0' && b[i] != '\0') {
-        if (a[i] != b[i]) {
-            return 0;
-        }
-        i++;
-    }
-    return a[i] == '\0' && b[i] == '\0';
-}
-
-static int string_starts_with(const char* str, const char* prefix) {
-    size_t i = 0;
-    while (prefix[i] != '\0' && str[i] != '\0') {
-        if (str[i] != prefix[i]) {
-            return 0;
-        }
-        i++;
-    }
-    return prefix[i] == '\0';
-}
-
 static void shell_print_prompt(void) {
-    terminal_write("Frewozet >>> ");
+    colorshell_write("Frewozet >>> ", "prompt");
 }
 
 static void shell_execute_command(const char* command) {
     if (strings_equal(command, "help")) {
-        terminal_write("Frewozet Shell Help:\n");
-        terminal_write("Frewozet Special Keyboard Layout:\n");
-        terminal_write("  - The '+' key is located where '=' is on a standard UK QWERTY layout.\n");
-        terminal_write("  - The '*' key is located where '.' is on a standard UK QWERTY layout.\n");
-        terminal_write("  - The '.' key is located where ',' is on a standard UK QWERTY layout.\n");
-        terminal_write("Available commands:\n");
-        terminal_write("  help - Show this help message\n");
-        terminal_write("  clear - Clear the terminal\n");
-        terminal_write("  ticks - Show the number of timer ticks since boot\n");
-        terminal_write("  echo <message> - Print the message to the terminal\n");
-        terminal_write("  calc <expression> - Evaluate a simple arithmetic expression.\n");
+        colorshell_write("Frewozet Shell Help:\n", "info");
+        colorshell_write("Frewozet Special Keyboard Layout:\n", "info");
+        colorshell_write("  - The '+' key is located where '=' is on a standard UK QWERTY layout.\n", "info");
+        colorshell_write("  - The '*' key is located where '.' is on a standard UK QWERTY layout.\n", "info");
+        colorshell_write("  - The '.' key is located where ',' is on a standard UK QWERTY layout.\n", "info");
+        colorshell_write("Available commands:\n", "info");
+        colorshell_write("  help - Show this help message\n", "info");
+        colorshell_write("  clear - Clear the terminal\n", "info");
+        colorshell_write("  ticks - Show the number of timer ticks since boot\n", "info");
+        colorshell_write("  echo <message> - Print the message to the terminal\n", "info");
+        colorshell_write("  calc <expression> - Evaluate a simple arithmetic expression.\n", "info");
+        colorshell_write("  colorshell - Enter Frewozet ColorShell mode with colored output\n", "info");
+        colorshell_write("  quit colorshell - Exit ColorShell mode and return to default shell\n", "info");
     } else if (strings_equal(command, "ticks")) {
         uint32_t ticks = get_timer_ticks();
         char buffer[32];
@@ -70,11 +50,18 @@ static void shell_execute_command(const char* command) {
         terminal_clear();
     } else if (strings_equal(command, "")) {
         // Do nothing for empty command
-    } else if (string_starts_with(command, "echo ")) {
+    } else if (string_starts_with(command, "echo")) {
         terminal_write(command + 5); // Skip "echo "
         terminal_write("\n");
-    } else if (string_starts_with(command, "calc ")) {
+    } else if (string_starts_with(command, "calc")) {
         run_calc(command + 5); // Skip "calc "
+    } else if (strings_equal(command, "colorshell")) {
+        terminal_set_color_mode(1);
+        colorshell_write("Welcome to Frewozet ColorShell\n", "info");
+    } else if (strings_equal(command, "quit colorshell")) {
+        terminal_set_color_mode(0);
+        terminal_color(0x07);
+        terminal_write("Returned to default shell.\n");
     } else {
         terminal_write("Unknown command: ");
         terminal_write(command);
