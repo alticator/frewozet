@@ -62,7 +62,19 @@ static void shell_execute_command(const char* command) {
         terminal_set_color_mode(0);
         terminal_color(0x07);
         terminal_write("Returned to default shell.\n");
-    } else {
+    } else if (strings_equal(command, "shutdown")) {
+        colorshell_write("Shutting down...\n", "warning");
+        outw(0x604, 0x2000); // QEMU shutdown command
+        outw(0xB004, 0x2000); // Bochs shutdown command
+        outw(0x4004, 0x3400); // VirtualBox shutdown command
+        colorshell_write("FREWOZET SHELL ERROR: This system does not support shutdown.\n", "error");
+        colorshell_write("The system can be halted instead with 'halt'\n", "info");
+    } else if (strings_equal(command, "halt")) {
+        colorshell_write("Halting the system...\n", "warning");
+        for (;;) {
+            __asm__ __volatile__("cli; hlt");
+        }
+    }else {
         terminal_write("Unknown command: ");
         terminal_write(command);
         terminal_write("\n");
