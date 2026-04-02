@@ -23,7 +23,11 @@ static void shell_execute_command(const char* command) {
         colorshell_write("  echo <message> - Print the message to the terminal\n", "info");
         colorshell_write("  calc <expression> - Evaluate a simple arithmetic expression.\n", "info");
         colorshell_write("  colorshell - Enter Frewozet ColorShell mode with colored output\n", "info");
+        colorshell_write("  colorshell <color>[blue, default]\n    - Change color scheme. Can only be used when ColorShell is active", "info");
         colorshell_write("  quit colorshell - Exit ColorShell mode and return to default shell\n", "info");
+        colorshell_write("  shutdown - Attempt to shut down the system. May not work on all hardware\n", "info");
+        colorshell_write("  halt - Halt the system. Alternative to shutdown on unsupported hardware\n", "info");
+        colorshell_write("  debug dividezero - For debug. Trigger a divide error. Will crash the system.\n", "info");
     } else if (strings_equal(command, "ticks")) {
         uint32_t ticks = get_timer_ticks();
         char buffer[32];
@@ -55,9 +59,23 @@ static void shell_execute_command(const char* command) {
         terminal_write("\n");
     } else if (string_starts_with(command, "calc")) {
         run_calc(command + 5); // Skip "calc "
-    } else if (strings_equal(command, "colorshell")) {
-        terminal_set_color_mode(1);
-        colorshell_write("Welcome to Frewozet ColorShell\n", "info");
+    } else if (string_starts_with(command, "colorshell")) {
+        if (terminal_get_color_mode()) {
+            if (strings_equal(command + 11, "blue")) {
+                colorshell_update_background(0x10); // Blue background
+                colorshell_write("ColorShell Blue enabled.\n", "info");
+            } else if (strings_equal(command + 11, "default") || strings_equal(command + 11, "black")) {
+                colorshell_update_background(0x00);
+                colorshell_write("ColorShell default enabled\n", "info");
+            } else {
+                colorshell_write("Already in ColorShell mode. Run 'colorshell <color>[blue, default]' to change color scheme.\n", "info");
+            }
+        } else {
+            terminal_set_color_mode(1);
+            colorshell_write("Welcome to Frewozet ColorShell\nRun 'colorshell <color>[blue, default]' to change color scheme.\n", "info");
+        }
+        // terminal_set_color_mode(1);
+        // colorshell_write("Welcome to Frewozet ColorShell\n", "info");
     } else if (strings_equal(command, "quit colorshell")) {
         terminal_set_color_mode(0);
         terminal_color(0x07);
@@ -74,7 +92,10 @@ static void shell_execute_command(const char* command) {
         for (;;) {
             __asm__ __volatile__("cli; hlt");
         }
-    }else {
+    } else if (strings_equal(command, "debug dividezero")) {
+        colorshell_write("FREWOZET SHELL WARNING: This command will trigger a division by\nzero exception, which will crash the system.\n", "warning");
+        __asm__ __volatile__("movl $1, %eax; movl $0, %ebx; div %ebx"); // This will cause a divide error exception
+    } else {
         terminal_write("Unknown command: ");
         terminal_write(command);
         terminal_write("\n");
@@ -105,7 +126,7 @@ void shell_handle_char(char c) {
     } else if (shell_buffer_length < SHELL_BUFFER_SIZE - 1) {
         shell_buffer[shell_buffer_length++] = c;
         shell_buffer[shell_buffer_length] = '\0';
-        terminal_writechar(c);
+        colorshell_writechar(c, "default");
     } else {
         terminal_write("\nFREWOZET SHELL ERROR: Command buffer overflow.\n");
         shell_buffer_length = 0;

@@ -13,6 +13,8 @@ void terminal_writechar(char c);
 void terminal_write_uint(uint32_t value);
 void write_hex_digit(uint8_t v);
 void write_hex8(uint8_t v);
+void colorshell_update_background(uint8_t color);
+void colorshell_writechar(char c, const char* type);
 void colorshell_write(const char* str, const char* type);
 void colorshell_write_uint(uint32_t value, const char* type);
 void terminal_color(uint8_t color);

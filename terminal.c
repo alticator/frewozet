@@ -7,6 +7,7 @@
 static size_t cursor_row;
 static size_t cursor_col;
 static uint8_t cursor_color;
+static uint8_t colorshell_background = 0x00;
 static volatile uint16_t* buffer;
 static int color_mode = 0;
 
@@ -24,6 +25,10 @@ void terminal_set_color_mode(int mode) {
 }
 
 void terminal_clear() {
+    cursor_color = 0x07;
+    if (color_mode) {
+        cursor_color = colorshell_background; // Use the current ColorShell background color for clearing
+    }
     for (int y = 0; y < VGA_HEIGHT; y++) {
         for (int x = 0; x < VGA_WIDTH; x++) {
             buffer[x + y*VGA_WIDTH] = vga_char(' ', cursor_color);
@@ -53,17 +58,6 @@ static void terminal_update_cursor(void) {
 
 void terminal_color(uint8_t color) {
     cursor_color = color;
-}
-
-static void terminal_scroll(void) {
-    for (int y = 1; y < VGA_HEIGHT; y++) {
-        for (int x = 0; x < VGA_WIDTH; x++) {
-            buffer[x + (y - 1)*VGA_WIDTH] = buffer[x + y*VGA_WIDTH];
-        }
-    }
-    for (int x = 0; x < VGA_WIDTH; x++) {
-        buffer[x + (VGA_HEIGHT - 1)*VGA_WIDTH] = vga_char(' ', cursor_color);
-    }
 }
 
 void terminal_write_uint(uint32_t value) {
@@ -101,23 +95,58 @@ void terminal_write_hex8(uint8_t v) {
 }
 
 static uint8_t get_colorshell_color(const char* type) {
-    if (strings_equal(type, "info")) {
-        return 0x0B; // Light cyan
-    } else if (strings_equal(type, "warning")) {
-        return 0x0E; // Yellow
-    } else if (strings_equal(type, "error")) {
-        return 0x0C; // Light red
-    } else if (strings_equal(type, "success")) {
-        return 0x0A; // Light green
-    } else if (strings_equal(type, "prompt")) {
-        return 0x0A; // Light green for prompts
-    } else if (strings_equal(type, "command")) {
-        return 0x0B; // Light cyan for commands
-    } else if (strings_equal(type, "output")) {
-        return 0x0F; // Bright white for command output
-    } else {
-        return 0x07; // Default gray
+    uint8_t color = 0x07; // Default gray
+    if (color_mode) {
+        if (strings_equal(type, "info")) {
+            color = 0x0B; // Light cyan
+        } else if (strings_equal(type, "warning")) {
+            color = 0x0E; // Yellow
+        } else if (strings_equal(type, "error")) {
+            color = 0x0C; // Light red
+        } else if (strings_equal(type, "success")) {
+            color = 0x0A; // Light green
+        } else if (strings_equal(type, "prompt")) {
+            color = 0x0D; // Light green for prompts
+        } else if (strings_equal(type, "command")) {
+            color = 0x0B; // Light cyan for commands
+        } else if (strings_equal(type, "output")) {
+            color = 0x0F; // Bright white for command output
+        }
+        return (colorshell_background & 0xF0) | (color & 0x0F); // Combine background and foreground colors
     }
+    return color;
+}
+
+static void terminal_scroll(void) {
+    for (int y = 1; y < VGA_HEIGHT; y++) {
+        for (int x = 0; x < VGA_WIDTH; x++) {
+            buffer[x + (y - 1)*VGA_WIDTH] = buffer[x + y*VGA_WIDTH];
+        }
+    }
+    for (int x = 0; x < VGA_WIDTH; x++) {
+        buffer[x + (VGA_HEIGHT - 1)*VGA_WIDTH] = vga_char(' ', get_colorshell_color("default"));
+    }
+}
+
+void colorshell_update_background(uint8_t new_background_color) {
+    for (int y = 0; y < VGA_HEIGHT; y++) {
+        for (int x = 0; x < VGA_WIDTH; x++) {
+            uint16_t cell = buffer[x + y*VGA_WIDTH];
+            uint8_t char_part = cell & 0x00FF;
+            uint8_t color = cell >> 8;
+            uint8_t foreground_color = color & 0x0F;
+            buffer[x + y*VGA_WIDTH] = ((uint16_t)(new_background_color | foreground_color) << 8) | char_part;
+        }
+    }
+    colorshell_background = new_background_color;
+}
+
+void colorshell_writechar(char c, const char* type) {
+    uint8_t color = get_colorshell_color(type);
+    uint8_t previous_color = cursor_color;
+    terminal_color(color);
+    terminal_writechar(c);
+    terminal_color(previous_color);
 }
 
 void colorshell_write(const char* str, const char* type) {
@@ -169,7 +198,7 @@ void terminal_backspace(void) {
         cursor_row--;
         cursor_col = VGA_WIDTH - 1;
     }
-    buffer[cursor_col + cursor_row*VGA_WIDTH] = vga_char(' ', cursor_color);
+    buffer[cursor_col + cursor_row*VGA_WIDTH] = vga_char(' ', get_colorshell_color("default"));
     terminal_update_cursor();
 }
 
