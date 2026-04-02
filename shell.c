@@ -9,6 +9,14 @@ static void shell_print_prompt(void) {
     colorshell_write("Frewozet >>> ", "prompt");
 }
 
+static void shell_dump_bytes(const uint8_t* data, size_t length) {
+    for (size_t i = 0; i < length; i++) {
+        terminal_write_hex8(data[i]);
+        terminal_write(" ");
+    }
+    terminal_write("\n");
+}
+
 static void shell_execute_command(const char* command) {
     if (strings_equal(command, "help")) {
         colorshell_write("Frewozet Shell Help:\n", "info");
@@ -98,6 +106,26 @@ static void shell_execute_command(const char* command) {
         void *ptr1 = kmalloc(64);
         terminal_write("Allocated 64 bytes at 0x");
         terminal_write_hex32((uint32_t)ptr1);
+        terminal_write("\n");
+    } else if (strings_equal(command, "memcpy")) {
+        colorshell_write("Creating source buffer with values 0x00 to 0x0F\nand copying to destination buffer...\n", "info");
+        uint8_t* src = kmalloc(16);
+        uint8_t* dest = kmalloc(16);
+        for (int i = 0; i < 16; i++) {
+            src[i] = (uint8_t)i;
+        }
+        memcpy(dest, src, 16);
+        colorshell_write("SRC: ", "output");
+        shell_dump_bytes((const uint8_t*)src, 16);
+        colorshell_write("DST: ", "output");
+        shell_dump_bytes((const uint8_t*)dest, 16);
+        terminal_write("\n");
+    } else if (strings_equal(command, "memset")) {
+        colorshell_write("Allocating buffer and setting all bytes to 0xAB...\n", "info");
+        uint8_t* buffer = (uint8_t*)kmalloc(16);
+        memset(buffer, 0xAB, 16);
+        colorshell_write("Buffer after memset: ", "output");
+        shell_dump_bytes(buffer, 16);
         terminal_write("\n");
     } else {
         terminal_write("Unknown command: ");
