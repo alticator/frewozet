@@ -127,7 +127,82 @@ static void shell_execute_command(const char* command) {
         colorshell_write("Buffer after memset: ", "output");
         shell_dump_bytes(buffer, 16);
         terminal_write("\n");
-    } else {
+    } else if (strings_equal(command, "strlen")) {
+        const char* s1 = "";
+        const char* s2 = "A";
+        const char* s3 = "Hello";
+        const char* s4 = "Frewozet Kernel";
+
+        terminal_write("strlen tests:\n");
+
+        terminal_write("\"\" = ");
+        terminal_write_decimal(strlen(s1));
+        terminal_write("\n");
+
+        terminal_write("\"A\" = ");
+        terminal_write_decimal(strlen(s2));
+        terminal_write("\n");
+
+        terminal_write("\"Hello\" = ");
+        terminal_write_decimal(strlen(s3));
+        terminal_write("\n");
+
+        terminal_write("\"Frewozet Kernel\" = ");
+        terminal_write_decimal(strlen(s4));
+        terminal_write("\n");
+
+        return;
+    } else if (strings_equal(command, "strcmp")) {
+        terminal_write("strcmp tests:\n");
+
+        terminal_write("abc vs abc = ");
+        terminal_write_decimal(strcmp("abc", "abc"));
+        terminal_write("\n");
+
+        terminal_write("abc vs abd = ");
+        terminal_write_decimal(strcmp("abc", "abd"));
+        terminal_write("\n");
+
+        terminal_write("abd vs abc = ");
+        terminal_write_decimal(strcmp("abd", "abc"));
+        terminal_write("\n");
+
+        terminal_write("abc vs ab = ");
+        terminal_write_decimal(strcmp("abc", "ab"));
+        terminal_write("\n");
+
+        terminal_write("ab vs abc = ");
+        terminal_write_decimal(strcmp("ab", "abc"));
+        terminal_write("\n");
+
+        return;
+    } else if (strings_equal(command, "strncmp")) {
+        terminal_write("strncmp tests:\n");
+
+        terminal_write("abc vs abc (3) = ");
+        terminal_write_decimal(strncmp("abc", "abc", 3));
+        terminal_write("\n");
+
+        terminal_write("abc vs abd (2) = ");
+        terminal_write_decimal(strncmp("abc", "abd", 2));
+        terminal_write("\n");
+
+        terminal_write("abc vs abd (3) = ");
+        terminal_write_decimal(strncmp("abc", "abd", 3));
+        terminal_write("\n");
+
+        terminal_write("abc vs ab (3) = ");
+        terminal_write_decimal(strncmp("abc", "ab", 3));
+        terminal_write("\n");
+
+        terminal_write("ab vs abc (2) = ");
+        terminal_write_decimal(strncmp("ab", "abc", 2));
+        terminal_write("\n");
+
+        return;
+    }
+    
+    else {
         terminal_write("Unknown command: ");
         terminal_write(command);
         terminal_write("\n");

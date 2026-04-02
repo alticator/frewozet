@@ -14,6 +14,7 @@ void terminal_write_uint(uint32_t value);
 void terminal_write_hex_digit(uint8_t v);
 void terminal_write_hex8(uint8_t v);
 void terminal_write_hex32(uint32_t value);
+void terminal_write_decimal(int32_t value);
 void colorshell_writechar(char c, const char* type);
 void colorshell_write(const char* str, const char* type);
 void colorshell_write_uint(uint32_t value, const char* type);

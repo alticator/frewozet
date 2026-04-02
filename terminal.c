@@ -160,6 +160,14 @@ void colorshell_write_uint(uint32_t value, const char* type) {
     terminal_color(previous_color);
 }
 
+void terminal_write_decimal(int32_t value) {
+    if (value < 0) {
+        terminal_writechar('-');
+        value = -value;
+    }
+    terminal_write_uint((uint32_t)value);
+}
+
 static void terminal_writechar_optimized(char c) {
     if (c == '\n') {
         cursor_row++;
