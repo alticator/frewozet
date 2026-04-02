@@ -23,7 +23,6 @@ static void shell_execute_command(const char* command) {
         colorshell_write("  echo <message> - Print the message to the terminal\n", "info");
         colorshell_write("  calc <expression> - Evaluate a simple arithmetic expression.\n", "info");
         colorshell_write("  colorshell - Enter Frewozet ColorShell mode with colored output\n", "info");
-        colorshell_write("  colorshell <color>[blue, default]\n    - Change color scheme. Can only be used when ColorShell is active", "info");
         colorshell_write("  quit colorshell - Exit ColorShell mode and return to default shell\n", "info");
         colorshell_write("  shutdown - Attempt to shut down the system. May not work on all hardware\n", "info");
         colorshell_write("  halt - Halt the system. Alternative to shutdown on unsupported hardware\n", "info");
@@ -59,20 +58,12 @@ static void shell_execute_command(const char* command) {
         terminal_write("\n");
     } else if (string_starts_with(command, "calc")) {
         run_calc(command + 5); // Skip "calc "
-    } else if (string_starts_with(command, "colorshell")) {
+    } else if (strings_equal(command, "colorshell")) {
         if (terminal_get_color_mode()) {
-            if (strings_equal(command + 11, "blue")) {
-                colorshell_update_background(0x10); // Blue background
-                colorshell_write("ColorShell Blue enabled.\n", "info");
-            } else if (strings_equal(command + 11, "default") || strings_equal(command + 11, "black")) {
-                colorshell_update_background(0x00);
-                colorshell_write("ColorShell default enabled\n", "info");
-            } else {
-                colorshell_write("Already in ColorShell mode. Run 'colorshell <color>[blue, default]' to change color scheme.\n", "info");
-            }
+            colorshell_write("Already in ColorShell mode. Run 'quit colorshell' to exit.\n", "info");
         } else {
             terminal_set_color_mode(1);
-            colorshell_write("Welcome to Frewozet ColorShell\nRun 'colorshell <color>[blue, default]' to change color scheme.\n", "info");
+            colorshell_write("Welcome to Frewozet ColorShell\nRun 'quit colorshell' to exit.\n", "info");
         }
         // terminal_set_color_mode(1);
         // colorshell_write("Welcome to Frewozet ColorShell\n", "info");
