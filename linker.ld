@@ -26,6 +26,8 @@ SECTIONS
         *(.bss*)
     }
 
+    _kernel_end = .;
+
     /DISCARD/ :
     {
         *(.comment)

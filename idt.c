@@ -19,7 +19,6 @@ struct __attribute__((packed)) idt_ptr {
 
 static struct idt_entry idt[256];
 static struct idt_ptr idtp;
-
 static uint32_t timer_ticks = 0;
 
 extern void idt_load(uint32_t idt_ptr_addr);
@@ -79,6 +78,14 @@ static void idt_set_gate(uint8_t num, uint32_t handler, uint16_t selector, uint8
     idt[num].zero = 0;
     idt[num].type_attr = type_attr;
     idt[num].offset_high = (uint16_t)((handler >> 16) & 0xFFFF);
+}
+
+static void terminal_write_hex32(uint32_t value) {
+    const char* digits = "0123456789ABCDEF";
+    terminal_write("0x");
+    for (int shift = 28; shift >= 0; shift -= 4) {
+        terminal_writechar(digits[(value >> shift) & 0xF]);
+    }
 }
 
 void idt_init(void) {
@@ -142,38 +149,46 @@ void idt_init(void) {
     idt_load((uint32_t)&idtp);
 }
 
-void interrupt_handler(uint32_t interrupt_number) {
-    if (interrupt_number < 32) {
+uint32_t get_timer_ticks(void) {
+    return timer_ticks;
+}
+
+void interrupt_handler(struct interrupt_frame* frame) {
+    uint32_t n = frame->interrupt_number;
+
+    if (n < 32) {
         terminal_write("\nFREWOZET SYSTEM ERROR: ");
-        terminal_write(exception_names[interrupt_number]);
-        terminal_write("\nSystem halted.");
+        terminal_write(exception_names[n]);
+        terminal_write("\nInterrupt Number: ");
+        terminal_write_uint(n);
+        terminal_write("\nError code: ");
+        terminal_write_hex32(frame->error_code);
+        terminal_write("\nExtended Instruction Pointer: ");
+        terminal_write_hex32(frame->eip);
+        terminal_write("\nCode Segment: ");
+        terminal_write_hex32(frame->cs);
+        terminal_write("\nExtended Flags: ");
+        terminal_write_hex32(frame->eflags);
+        terminal_write("\nSystem halted. Restart required.\n");
+
         for (;;) {
             __asm__ __volatile__("cli; hlt");
         }
     }
 
-    if (interrupt_number == 32) {
-        if (timer_ticks < UINT32_MAX) {
-            timer_ticks++;
-        } else {
-            timer_ticks = 0x00000000; // Wrap around to prevent overflow
-        }
+    if (n == 32) {
+        timer_ticks++;
         pic_send_eoi(0);
         return;
     }
 
-    if (interrupt_number == 33) {
+    if (n == 33) {
         keyboard_handle();
         pic_send_eoi(1);
         return;
     }
 
-    if (interrupt_number >= 32 && interrupt_number <= 47) {
-        pic_send_eoi((uint8_t)(interrupt_number - 32));
-        return;
+    if (n >= 32 && n <= 47) {
+        pic_send_eoi((uint8_t)(n - 32));
     }
-}
-
-uint32_t get_timer_ticks(void) {
-    return timer_ticks;
 }

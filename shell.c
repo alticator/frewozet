@@ -9,6 +9,14 @@ static void shell_print_prompt(void) {
     colorshell_write("Frewozet >>> ", "prompt");
 }
 
+static void shell_dump_bytes(const uint8_t* data, size_t length) {
+    for (size_t i = 0; i < length; i++) {
+        terminal_write_hex8(data[i]);
+        terminal_write(" ");
+    }
+    terminal_write("\n");
+}
+
 static void shell_execute_command(const char* command) {
     if (strings_equal(command, "help")) {
         colorshell_write("Frewozet Shell Help:\n", "info");
@@ -24,6 +32,9 @@ static void shell_execute_command(const char* command) {
         colorshell_write("  calc <expression> - Evaluate a simple arithmetic expression.\n", "info");
         colorshell_write("  colorshell - Enter Frewozet ColorShell mode with colored output\n", "info");
         colorshell_write("  quit colorshell - Exit ColorShell mode and return to default shell\n", "info");
+        colorshell_write("  shutdown - Attempt to shut down the system. May not work on all hardware\n", "info");
+        colorshell_write("  halt - Halt the system. Alternative to shutdown on unsupported hardware\n", "info");
+        colorshell_write("  debug dividezero - For debug. Trigger a divide error. Will crash the system.\n", "info");
     } else if (strings_equal(command, "ticks")) {
         uint32_t ticks = get_timer_ticks();
         char buffer[32];
@@ -56,8 +67,14 @@ static void shell_execute_command(const char* command) {
     } else if (string_starts_with(command, "calc")) {
         run_calc(command + 5); // Skip "calc "
     } else if (strings_equal(command, "colorshell")) {
-        terminal_set_color_mode(1);
-        colorshell_write("Welcome to Frewozet ColorShell\n", "info");
+        if (terminal_get_color_mode()) {
+            colorshell_write("Already in ColorShell mode. Run 'quit colorshell' to exit.\n", "info");
+        } else {
+            terminal_set_color_mode(1);
+            colorshell_write("Welcome to Frewozet ColorShell\nRun 'quit colorshell' to exit.\n", "info");
+        }
+        // terminal_set_color_mode(1);
+        // colorshell_write("Welcome to Frewozet ColorShell\n", "info");
     } else if (strings_equal(command, "quit colorshell")) {
         terminal_set_color_mode(0);
         terminal_color(0x07);
@@ -74,7 +91,118 @@ static void shell_execute_command(const char* command) {
         for (;;) {
             __asm__ __volatile__("cli; hlt");
         }
-    }else {
+    } else if (strings_equal(command, "debug dividezero")) {
+        colorshell_write("FREWOZET SHELL WARNING: This command will trigger a division by\nzero exception, which will crash the system.\n", "warning");
+        __asm__ __volatile__("movl $1, %eax; movl $0, %ebx; div %ebx"); // This will cause a divide error exception
+    } else if (strings_equal(command, "heap")) {
+        uint32_t heap_start = memory_get_heap_start();
+        uint32_t heap_current = memory_get_heap_current();
+        terminal_write("Heap Start: 0x");
+        terminal_write_hex32(heap_start);
+        terminal_write("\nHeap Current: 0x");
+        terminal_write_hex32(heap_current);
+        terminal_write("\n");
+    } else if (strings_equal(command, "alloc")) {
+        void *ptr1 = kmalloc(64);
+        terminal_write("Allocated 64 bytes at 0x");
+        terminal_write_hex32((uint32_t)ptr1);
+        terminal_write("\n");
+    } else if (strings_equal(command, "memcpy")) {
+        colorshell_write("Creating source buffer with values 0x00 to 0x0F\nand copying to destination buffer...\n", "info");
+        uint8_t* src = kmalloc(16);
+        uint8_t* dest = kmalloc(16);
+        for (int i = 0; i < 16; i++) {
+            src[i] = (uint8_t)i;
+        }
+        memcpy(dest, src, 16);
+        colorshell_write("SRC: ", "output");
+        shell_dump_bytes((const uint8_t*)src, 16);
+        colorshell_write("DST: ", "output");
+        shell_dump_bytes((const uint8_t*)dest, 16);
+        terminal_write("\n");
+    } else if (strings_equal(command, "memset")) {
+        colorshell_write("Allocating buffer and setting all bytes to 0xAB...\n", "info");
+        uint8_t* buffer = (uint8_t*)kmalloc(16);
+        memset(buffer, 0xAB, 16);
+        colorshell_write("Buffer after memset: ", "output");
+        shell_dump_bytes(buffer, 16);
+        terminal_write("\n");
+    } else if (strings_equal(command, "strlen")) {
+        const char* s1 = "";
+        const char* s2 = "A";
+        const char* s3 = "Hello";
+        const char* s4 = "Frewozet Kernel";
+
+        terminal_write("strlen tests:\n");
+
+        terminal_write("\"\" = ");
+        terminal_write_decimal(strlen(s1));
+        terminal_write("\n");
+
+        terminal_write("\"A\" = ");
+        terminal_write_decimal(strlen(s2));
+        terminal_write("\n");
+
+        terminal_write("\"Hello\" = ");
+        terminal_write_decimal(strlen(s3));
+        terminal_write("\n");
+
+        terminal_write("\"Frewozet Kernel\" = ");
+        terminal_write_decimal(strlen(s4));
+        terminal_write("\n");
+
+        return;
+    } else if (strings_equal(command, "strcmp")) {
+        terminal_write("strcmp tests:\n");
+
+        terminal_write("abc vs abc = ");
+        terminal_write_decimal(strcmp("abc", "abc"));
+        terminal_write("\n");
+
+        terminal_write("abc vs abd = ");
+        terminal_write_decimal(strcmp("abc", "abd"));
+        terminal_write("\n");
+
+        terminal_write("abd vs abc = ");
+        terminal_write_decimal(strcmp("abd", "abc"));
+        terminal_write("\n");
+
+        terminal_write("abc vs ab = ");
+        terminal_write_decimal(strcmp("abc", "ab"));
+        terminal_write("\n");
+
+        terminal_write("ab vs abc = ");
+        terminal_write_decimal(strcmp("ab", "abc"));
+        terminal_write("\n");
+
+        return;
+    } else if (strings_equal(command, "strncmp")) {
+        terminal_write("strncmp tests:\n");
+
+        terminal_write("abc vs abc (3) = ");
+        terminal_write_decimal(strncmp("abc", "abc", 3));
+        terminal_write("\n");
+
+        terminal_write("abc vs abd (2) = ");
+        terminal_write_decimal(strncmp("abc", "abd", 2));
+        terminal_write("\n");
+
+        terminal_write("abc vs abd (3) = ");
+        terminal_write_decimal(strncmp("abc", "abd", 3));
+        terminal_write("\n");
+
+        terminal_write("abc vs ab (3) = ");
+        terminal_write_decimal(strncmp("abc", "ab", 3));
+        terminal_write("\n");
+
+        terminal_write("ab vs abc (2) = ");
+        terminal_write_decimal(strncmp("ab", "abc", 2));
+        terminal_write("\n");
+
+        return;
+    }
+    
+    else {
         terminal_write("Unknown command: ");
         terminal_write(command);
         terminal_write("\n");
@@ -105,7 +233,7 @@ void shell_handle_char(char c) {
     } else if (shell_buffer_length < SHELL_BUFFER_SIZE - 1) {
         shell_buffer[shell_buffer_length++] = c;
         shell_buffer[shell_buffer_length] = '\0';
-        terminal_writechar(c);
+        colorshell_writechar(c, "default");
     } else {
         terminal_write("\nFREWOZET SHELL ERROR: Command buffer overflow.\n");
         shell_buffer_length = 0;
