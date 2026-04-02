@@ -33,6 +33,17 @@ void* kmalloc(size_t size) {
     return kmalloc_aligned(size, 16);
 }
 
+void* kcalloc(size_t num, size_t size) {
+    size_t total_size = num * size;
+    void* ptr = kmalloc(total_size);
+    if (ptr) {
+        for (size_t i = 0; i < total_size; i++) {
+            ((uint8_t*)ptr)[i] = 0;
+        }
+    }
+    return ptr;
+}
+
 uint32_t memory_get_heap_start(void) {
     return heap_start;
 }
