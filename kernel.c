@@ -19,6 +19,9 @@ void kmain(void) {
     terminal_write("Starting PIC remapping....");
     pic_remap(32, 40);
     terminal_write("  OK\n");
+    terminal_write("Initializing memory management....");
+    memory_init();
+    terminal_write("  OK\n");
     terminal_write("Enabling interrupts....");
     __asm__ __volatile__("sti");
     terminal_write("  OK\n\n");

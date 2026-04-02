@@ -95,6 +95,19 @@ static void shell_execute_command(const char* command) {
     } else if (strings_equal(command, "debug dividezero")) {
         colorshell_write("FREWOZET SHELL WARNING: This command will trigger a division by\nzero exception, which will crash the system.\n", "warning");
         __asm__ __volatile__("movl $1, %eax; movl $0, %ebx; div %ebx"); // This will cause a divide error exception
+    } else if (strings_equal(command, "heap")) {
+        uint32_t heap_start = memory_get_heap_start();
+        uint32_t heap_current = memory_get_heap_current();
+        terminal_write("Heap Start: 0x");
+        terminal_write_hex32(heap_start);
+        terminal_write("\nHeap Current: 0x");
+        terminal_write_hex32(heap_current);
+        terminal_write("\n");
+    } else if (strings_equal(command, "alloc")) {
+        void *ptr1 = kmalloc(64);
+        terminal_write("Allocated 64 bytes at 0x");
+        terminal_write_hex32((uint32_t)ptr1);
+        terminal_write("\n");
     } else {
         terminal_write("Unknown command: ");
         terminal_write(command);

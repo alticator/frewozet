@@ -8,6 +8,7 @@
 #include "idt.h"
 #include "ports.h"
 #include "calc.h"
+#include "memory.h"
 
 void shell_init(void);
 void shell_handle_char(char c);
