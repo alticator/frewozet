@@ -109,7 +109,7 @@ static uint8_t get_colorshell_color(const char* type) {
         } else if (strings_equal(type, "prompt")) {
             color = 0x0D; // Light green for prompts
         } else if (strings_equal(type, "command")) {
-            color = 0x0B; // Light cyan for commands
+            color = 0x0F; // Bright white for commands
         } else if (strings_equal(type, "output")) {
             color = 0x0F; // Bright white for command output
         }

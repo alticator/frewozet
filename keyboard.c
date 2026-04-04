@@ -14,7 +14,7 @@ static const char keyboard_map[128] = {
     'q','w','e','r','t','y','u','i','o','p','[',']',
     '\n',
     0,
-    'a','s','d','f','g','h','j','k','l',';','\'','`',
+    'a','s','d','f','g','h','j','k','l','\"','\'','`',
     0,
     '\\',
     'z','x','c','v','b','n','m','.','*','/',
@@ -37,7 +37,7 @@ void keyboard_handle(void) {
         }
     } else {
         terminal_write("< [?] @ 0x");
-        write_hex8(scancode);
+        terminal_write_hex8(scancode);
         terminal_write(" >");
     }
 }
