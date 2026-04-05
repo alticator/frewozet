@@ -136,9 +136,9 @@ void shell_init(void) {
 void shell_handle_char(char c) {
     if (c == '\n') {
         terminal_write("\n");
+        shell_history_add(shell_buffer);
         char* argv[SHELL_MAX_ARGS];
         int argc = shell_tokenize(shell_buffer, argv, SHELL_MAX_ARGS);
-        shell_history_add(shell_buffer);
         shell_history_view_index = -1;
         shell_execute_command(argc, argv);
         shell_buffer_length = 0;
