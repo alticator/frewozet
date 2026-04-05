@@ -50,3 +50,11 @@ int strncmp(const char* a, const char* b, size_t n) {
     }
     return (int)((unsigned char)a[i]) - (int)((unsigned char)b[i]);
 }
+
+int strequal(const char* a, const char* b) {
+    return strcmp(a, b) == 0;
+}
+
+int strnequal(const char* a, const char* b, size_t n) {
+    return strncmp(a, b, n) == 0;
+}

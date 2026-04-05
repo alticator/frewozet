@@ -30,6 +30,13 @@ void keyboard_handle(void) {
     if (scancode & 0x80) {
         return;
     }
+    if (scancode == 0x48) {
+        shell_history_prev();
+        return;
+    } else if (scancode == 0x50) {
+        shell_history_next();
+        return;
+    }
     if (scancode < 128) {
         char c = keyboard_map[scancode];
         if (c) {

@@ -6,6 +6,7 @@
 #include "memory.h"
 #include "ports.h"
 #include "idt.h"
+#include "shell.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -178,6 +179,7 @@ static void cmd_help(int argc, char** argv);
 static void cmd_ticks(int argc, char** argv);
 static void cmd_clear(int argc, char** argv);
 static void cmd_echo(int argc, char** argv);
+static void cmd_history(int argc, char** argv);
 static void cmd_calc(int argc, char** argv);
 static void cmd_colorshell(int argc, char** argv);
 static void cmd_quit(int argc, char** argv);
@@ -197,6 +199,7 @@ static const struct shell_command shell_commands[] = {
     {"clear",      cmd_clear,      "clear                         - Clear the terminal"},
     {"ticks",      cmd_ticks,      "ticks                         - Show timer ticks"},
     {"echo",       cmd_echo,       "echo <message>                - Print text"},
+    {"history",    cmd_history,    "history                       - Show command history"},
     {"calc",       cmd_calc,       "calc <a> <op> <b>             - Simple arithmetic"},
     {"colorshell", cmd_colorshell, "colorshell                    - Enter ColorShell mode"},
     {"quit",       cmd_quit,       "quit colorshell               - Exit ColorShell mode"},
@@ -274,6 +277,13 @@ static void cmd_echo(int argc, char** argv) {
         }
     }
     terminal_write("\n");
+}
+
+static void cmd_history(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    
+    shell_history_print();
 }
 
 static void cmd_calc(int argc, char** argv) {
