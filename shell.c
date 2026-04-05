@@ -39,10 +39,12 @@ static void shell_load_buffer(const char* text) {
 }
 
 static void shell_history_add(const char* line) {
+    // Don't add empty lines to history
     if (line[0] == '\0') {
         return;
     }
 
+    // Avoid adding duplicate consecutive entries
     if (shell_history_count > 0) {
         int newest = (shell_history_next_index - 1 + SHELL_HISTORY_SIZE) % SHELL_HISTORY_SIZE;
         if (strcmp(shell_history[newest], line) == 0) {
@@ -50,6 +52,7 @@ static void shell_history_add(const char* line) {
         }
     }
 
+    // Add the line to history
     size_t i = 0;
     while (line[i] != '\0' && i < SHELL_BUFFER_SIZE - 1) {
         shell_history[shell_history_next_index][i] = line[i];
@@ -57,8 +60,10 @@ static void shell_history_add(const char* line) {
     }
     shell_history[shell_history_next_index][i] = '\0';
 
+    // Update indices
     shell_history_next_index = (shell_history_next_index + 1) % SHELL_HISTORY_SIZE;
 
+    // Update count (max is SHELL_HISTORY_SIZE)
     if (shell_history_count < SHELL_HISTORY_SIZE) {
         shell_history_count++;
     }
@@ -69,6 +74,7 @@ static int shell_history_physical_index(int history_offset_from_newest) {
 }
 
 void shell_history_prev(void) {
+    // If history is empty, do nothing
     if (shell_history_count == 0) {
         return;
     }
@@ -83,11 +89,13 @@ void shell_history_prev(void) {
 
     shell_clear_onscreen_command();
 
+    // Load the command from history into the buffer and display it
     int idx = shell_history_physical_index(shell_history_view_index);
     shell_load_buffer(shell_history[idx]);
 }
 
 void shell_history_next(void) {
+    // If history is empty or we're not currently viewing history, do nothing
     if (shell_history_count == 0 || shell_history_view_index == -1) {
         return;
     }
@@ -106,16 +114,19 @@ void shell_history_next(void) {
 }
 
 void shell_history_print() {
+    // If history is empty, print a message, should be impossible as history command itself will always be shown
     if (shell_history_count == 0) {
-        terminal_write("No history.\n");
+        colorshell_write("No history.\n", "error");
         return;
     }
 
+    // Calculate the starting index for the oldest command to display
     int start = (shell_history_next_index - shell_history_count + SHELL_HISTORY_SIZE) % SHELL_HISTORY_SIZE;
 
     colorshell_write("Frewozet Shell command history for 16 most recent commands:\n", "info");
     colorshell_write("Use Up/Down arrow keys to navigate through history.\n", "prompt");
 
+    // Print the history entries with their relative indices
     for (int i = 0; i < shell_history_count; i++) {
         int idx = (start + i) % SHELL_HISTORY_SIZE;
 
@@ -134,7 +145,7 @@ void shell_init(void) {
 }
 
 void shell_handle_char(char c) {
-    if (c == '\n') {
+    if (c == '\n') { // Enter key, run command
         terminal_write("\n");
         shell_history_add(shell_buffer);
         char* argv[SHELL_MAX_ARGS];
@@ -144,19 +155,19 @@ void shell_handle_char(char c) {
         shell_buffer_length = 0;
         shell_buffer[0] = '\0';
         shell_print_prompt();
-    } else if (c == '\b') {
+    } else if (c == '\b') { // Backspace
         if (shell_buffer_length > 0) {
             shell_buffer_length--;
             shell_history_view_index = -1;
             terminal_backspace();
             shell_buffer[shell_buffer_length] = '\0';
         }
-    } else if (shell_buffer_length < SHELL_BUFFER_SIZE - 1) {
+    } else if (shell_buffer_length < SHELL_BUFFER_SIZE - 1) { // Regular character
         shell_buffer[shell_buffer_length++] = c;
         shell_buffer[shell_buffer_length] = '\0';
         shell_history_view_index = -1;
         colorshell_writechar(c, "default");
-    } else {
+    } else { // Buffer overflow, reset buffer and print error
         terminal_write("\nFREWOZET SHELL ERROR: Command buffer overflow.\n");
         shell_buffer_length = 0;
         shell_buffer[0] = '\0';
