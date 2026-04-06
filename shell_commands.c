@@ -7,6 +7,7 @@
 #include "ports.h"
 #include "idt.h"
 #include "shell.h"
+#include "ram_mapper.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -186,6 +187,7 @@ static void cmd_quit(int argc, char** argv);
 static void cmd_shutdown(int argc, char** argv);
 static void cmd_halt(int argc, char** argv);
 static void cmd_debug(int argc, char** argv);
+static void cmd_meminfo(int argc, char** argv);
 static void cmd_heap(int argc, char** argv);
 static void cmd_alloc(int argc, char** argv);
 static void cmd_memcpy(int argc, char** argv);
@@ -206,6 +208,7 @@ static const struct shell_command shell_commands[] = {
     {"shutdown",   cmd_shutdown,   "shutdown                      - Attempt shutdown"},
     {"halt",       cmd_halt,       "halt                          - Halt the system"},
     {"debug",      cmd_debug,      "debug dividezero              - Trigger divide error"},
+    {"meminfo",    cmd_meminfo,    "meminfo                       - Show E820 memory map"},
     {"heap",       cmd_heap,       "heap                          - Show heap pointers"},
     {"alloc",      cmd_alloc,      "alloc                         - Allocate 64 bytes"},
     {"memcpy",     cmd_memcpy,     "memcpy                        - Test memcpy"},
@@ -282,7 +285,7 @@ static void cmd_echo(int argc, char** argv) {
 static void cmd_history(int argc, char** argv) {
     (void)argc;
     (void)argv;
-    
+
     shell_history_print();
 }
 
@@ -347,6 +350,30 @@ static void cmd_debug(int argc, char** argv) {
     } else {
         colorshell_write("Usage: debug <arg>[dividezero]\n", "error");
     }
+}
+
+static void cmd_meminfo(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    const struct e820_info* info = ram_mapper_get_info();
+    if (!ram_mapper_available()) {
+        colorshell_write("E820 memory map information is not available.\n", "error");
+        return;
+    }
+    colorshell_write("E820 Memory Map:\n", "info");
+    for (size_t i = 0; i < info->count; i++) {
+        const struct e820_entry* entry = &info->entries[i];
+        terminal_write("Base: 0x");
+        terminal_write_hex64(entry->base);
+        terminal_write(", Length: 0x");
+        terminal_write_hex64(entry->length);
+        terminal_write(", Type: ");
+        terminal_write(ram_mapper_type_to_string(entry->type));
+        terminal_write("\n");
+    }
+    terminal_write("Total usable memory: ");
+    terminal_write_uint(ram_mapper_get_total_usable_memory() / (1024 * 1024));
+    terminal_write(" MB\n");
 }
 
 static void cmd_heap(int argc, char** argv) {

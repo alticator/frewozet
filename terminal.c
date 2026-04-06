@@ -95,6 +95,12 @@ void terminal_write_hex32(uint32_t value) {
     }
 }
 
+void terminal_write_hex64(uint64_t value) {
+    for (int shift = 60; shift >= 0; shift -= 4) {
+        terminal_write_hex_digit((value >> shift) & 0x0F);
+    }
+}
+
 static uint8_t get_colorshell_color(const char* type) {
     uint8_t color = 0x07; // Default gray
     if (color_mode) {
