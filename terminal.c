@@ -101,6 +101,12 @@ void terminal_write_hex64(uint64_t value) {
     }
 }
 
+void terminal_write_bytesize(uint64_t value) {
+    char buffer[32];
+    format_bytes(value, buffer);
+    terminal_write(buffer);
+}
+
 static uint8_t get_colorshell_color(const char* type) {
     uint8_t color = 0x07; // Default gray
     if (color_mode) {

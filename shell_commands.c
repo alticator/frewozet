@@ -355,25 +355,94 @@ static void cmd_debug(int argc, char** argv) {
 static void cmd_meminfo(int argc, char** argv) {
     (void)argc;
     (void)argv;
-    const struct e820_info* info = ram_mapper_get_info();
+
     if (!ram_mapper_available()) {
-        colorshell_write("E820 memory map information is not available.\n", "error");
+        colorshell_write("E820 memory map not available.\n", "error");
         return;
     }
-    colorshell_write("E820 Memory Map:\n", "info");
-    for (size_t i = 0; i < info->count; i++) {
-        const struct e820_entry* entry = &info->entries[i];
-        terminal_write("Base: 0x");
-        terminal_write_hex64(entry->base);
-        terminal_write(", Length: 0x");
-        terminal_write_hex64(entry->length);
-        terminal_write(", Type: ");
-        terminal_write(ram_mapper_type_to_string(entry->type));
-        terminal_write("\n");
+
+    const struct e820_info* info = ram_mapper_get_info();
+
+    uint64_t usable_total = 0;
+    uint64_t reserved_total = 0;
+    uint64_t reclaim_total = 0;
+    uint64_t nvs_total = 0;
+    uint64_t bad_total = 0;
+    uint64_t unknown_total = 0;
+
+    terminal_write("E820 entries: ");
+    terminal_write_decimal((int)info->count);
+    terminal_write("\n");
+
+    for (uint16_t i = 0; i < info->count; i++) {
+        const struct e820_entry* e = &info->entries[i];
+
+        terminal_write("[");
+        terminal_write_decimal((int)i);
+        terminal_write("] base=0x");
+        terminal_write_hex64(e->base);
+
+        terminal_write(" length=0x");
+        terminal_write_hex64(e->length);
+
+        terminal_write(" type=");
+        terminal_write(ram_mapper_type_to_string(e->type));
+        terminal_write(" (");
+        terminal_write_decimal((int)e->type);
+        terminal_write(")\n");
+
+        switch (e->type) {
+            case 1:
+                usable_total += e->length;
+                break;
+            case 2:
+                reserved_total += e->length;
+                break;
+            case 3:
+                reclaim_total += e->length;
+                break;
+            case 4:
+                nvs_total += e->length;
+                break;
+            case 5:
+                bad_total += e->length;
+                break;
+            default:
+                unknown_total += e->length;
+                break;
+        }
     }
-    terminal_write("Total usable memory: ");
-    terminal_write_uint(ram_mapper_get_total_usable_memory() / (1024 * 1024));
-    terminal_write(" MB\n");
+
+    terminal_write("\nMemory totals:\n");
+
+    terminal_write("Total RAM:    ");
+    uint64_t total_ram = usable_total + reserved_total + reclaim_total + nvs_total + bad_total + unknown_total;
+    terminal_write_bytesize(total_ram);
+    terminal_write("\n");
+
+    terminal_write("Usable:       ");
+    terminal_write_bytesize(usable_total);
+    terminal_write("\n");
+
+    terminal_write("Reserved:     ");
+    terminal_write_bytesize(reserved_total);
+    terminal_write("\n");
+
+    terminal_write("ACPI Reclaim: ");
+    terminal_write_bytesize(reclaim_total);
+    terminal_write("\n");
+
+    terminal_write("ACPI NVS:     ");
+    terminal_write_bytesize(nvs_total);
+    terminal_write("\n");
+
+    terminal_write("Bad:          ");
+    terminal_write_bytesize(bad_total);
+    terminal_write("\n");
+
+    terminal_write("Unknown:      ");
+    terminal_write_bytesize(unknown_total);
+    terminal_write("\n");
 }
 
 static void cmd_heap(int argc, char** argv) {
@@ -385,6 +454,10 @@ static void cmd_heap(int argc, char** argv) {
     terminal_write_hex32(heap_start);
     terminal_write("\nHeap Current: 0x");
     terminal_write_hex32(heap_current);
+    terminal_write("\nHeap Limit: 0x");
+    terminal_write_hex32(memory_get_heap_limit());
+    terminal_write("\nHeap Remaining: ");
+    terminal_write_bytesize(memory_get_heap_remaining());
     terminal_write("\n");
 }
 
@@ -392,6 +465,10 @@ static void cmd_alloc(int argc, char** argv) {
     (void)argc;
     (void)argv;
     void *ptr1 = kmalloc(64);
+    if (!ptr1) {
+        colorshell_write("Allocation failed\n", "error");
+        return;
+    }
     terminal_write("Allocated 64 bytes at 0x");
     terminal_write_hex32((uint32_t)ptr1);
     terminal_write("\n");

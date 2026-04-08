@@ -58,3 +58,37 @@ int strequal(const char* a, const char* b) {
 int strnequal(const char* a, const char* b, size_t n) {
     return strncmp(a, b, n) == 0;
 }
+
+void str_append(char* dest, size_t *pos, const char* src) {
+    size_t i = 0;
+    while (*src != '\0') {
+        dest[(*pos)++] = *src++;
+    }
+    dest[*pos] = '\0';
+}
+
+void str_appendchar(char* dest, size_t *pos, char c) {
+    dest[(*pos)++] = c;
+    dest[*pos] = '\0';
+}
+
+void str_append_uint64(char* dest, size_t *pos, uint64_t value) {
+    char buffer[21]; // Max length for 64-bit integer + null terminator
+    size_t i = 0;
+    if (value == 0) {
+        buffer[i++] = '0';
+    } else {
+        while (value > 0) {
+            buffer[i++] = '0' + (value % 10);
+            value /= 10;
+        }
+        // Reverse the digits
+        for (size_t j = 0; j < i / 2; j++) {
+            char temp = buffer[j];
+            buffer[j] = buffer[i - 1 - j];
+            buffer[i - 1 - j] = temp;
+        }
+    }
+    buffer[i] = '\0';
+    str_append(dest, pos, buffer);
+}
