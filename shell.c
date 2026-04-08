@@ -1,210 +1,138 @@
 #include "shell.h"
+#include "shell_parser.h"
+#include "shell_commands.h"
 
 #define SHELL_BUFFER_SIZE 128
+#define SHELL_MAX_ARGS 16
+#define SHELL_HISTORY_SIZE 16
 
 static char shell_buffer[SHELL_BUFFER_SIZE];
 static size_t shell_buffer_length = 0;
+static char shell_history[SHELL_HISTORY_SIZE][SHELL_BUFFER_SIZE];
+static int shell_history_count = 0;
+static int shell_history_next_index = 0;
+static int shell_history_view_index = -1;
 
 static void shell_print_prompt(void) {
     colorshell_write("Frewozet >>> ", "prompt");
 }
 
-static void shell_dump_bytes(const uint8_t* data, size_t length) {
-    for (size_t i = 0; i < length; i++) {
-        terminal_write_hex8(data[i]);
-        terminal_write(" ");
+static void shell_clear_onscreen_command(void) {
+    while (shell_buffer_length > 0) {
+        terminal_backspace();
+        shell_buffer_length--;
     }
-    terminal_write("\n");
+    shell_buffer[0] = '\0';
 }
 
-static void shell_execute_command(const char* command) {
-    if (strings_equal(command, "help")) {
-        colorshell_write("Frewozet Shell Help:\n", "info");
-        colorshell_write("Frewozet Special Keyboard Layout:\n", "info");
-        colorshell_write("  - The '+' key is located where '=' is on a standard UK QWERTY layout.\n", "info");
-        colorshell_write("  - The '*' key is located where '.' is on a standard UK QWERTY layout.\n", "info");
-        colorshell_write("  - The '.' key is located where ',' is on a standard UK QWERTY layout.\n", "info");
-        colorshell_write("Available commands:\n", "info");
-        colorshell_write("  help - Show this help message\n", "info");
-        colorshell_write("  clear - Clear the terminal\n", "info");
-        colorshell_write("  ticks - Show the number of timer ticks since boot\n", "info");
-        colorshell_write("  echo <message> - Print the message to the terminal\n", "info");
-        colorshell_write("  calc <expression> - Evaluate a simple arithmetic expression.\n", "info");
-        colorshell_write("  colorshell - Enter Frewozet ColorShell mode with colored output\n", "info");
-        colorshell_write("  quit colorshell - Exit ColorShell mode and return to default shell\n", "info");
-        colorshell_write("  shutdown - Attempt to shut down the system. May not work on all hardware\n", "info");
-        colorshell_write("  halt - Halt the system. Alternative to shutdown on unsupported hardware\n", "info");
-        colorshell_write("  debug dividezero - For debug. Trigger a divide error. Will crash the system.\n", "info");
-    } else if (strings_equal(command, "ticks")) {
-        uint32_t ticks = get_timer_ticks();
-        char buffer[32];
-        int length = 0;
-        if (ticks == 0) {
-            buffer[length++] = '0';
-        } else {
-            uint32_t temp = ticks;
-            while (temp > 0) {
-                buffer[length++] = '0' + (temp % 10);
-                temp /= 10;
-            }
-            for (int i = 0; i < length / 2; i++) {
-                char tmp = buffer[i];
-                buffer[i] = buffer[length - 1 - i];
-                buffer[length - 1 - i] = tmp;
-            }
-        }
-        buffer[length] = '\0';
-        terminal_write("Timer ticks since boot: ");
-        terminal_write(buffer);
-        terminal_write("\n");
-    } else if (strings_equal(command, "clear")) {
-        terminal_clear();
-    } else if (strings_equal(command, "")) {
-        // Do nothing for empty command
-    } else if (string_starts_with(command, "echo")) {
-        terminal_write(command + 5); // Skip "echo "
-        terminal_write("\n");
-    } else if (string_starts_with(command, "calc")) {
-        run_calc(command + 5); // Skip "calc "
-    } else if (strings_equal(command, "colorshell")) {
-        if (terminal_get_color_mode()) {
-            colorshell_write("Already in ColorShell mode. Run 'quit colorshell' to exit.\n", "info");
-        } else {
-            terminal_set_color_mode(1);
-            colorshell_write("Welcome to Frewozet ColorShell\nRun 'quit colorshell' to exit.\n", "info");
-        }
-        // terminal_set_color_mode(1);
-        // colorshell_write("Welcome to Frewozet ColorShell\n", "info");
-    } else if (strings_equal(command, "quit colorshell")) {
-        terminal_set_color_mode(0);
-        terminal_color(0x07);
-        terminal_write("Returned to default shell.\n");
-    } else if (strings_equal(command, "shutdown")) {
-        colorshell_write("Shutting down...\n", "warning");
-        outw(0x604, 0x2000); // QEMU shutdown command
-        outw(0xB004, 0x2000); // Bochs shutdown command
-        outw(0x4004, 0x3400); // VirtualBox shutdown command
-        colorshell_write("FREWOZET SHELL ERROR: This system does not support shutdown.\n", "error");
-        colorshell_write("The system can be halted instead with 'halt'\n", "info");
-    } else if (strings_equal(command, "halt")) {
-        colorshell_write("Halting the system...\n", "warning");
-        for (;;) {
-            __asm__ __volatile__("cli; hlt");
-        }
-    } else if (strings_equal(command, "debug dividezero")) {
-        colorshell_write("FREWOZET SHELL WARNING: This command will trigger a division by\nzero exception, which will crash the system.\n", "warning");
-        __asm__ __volatile__("movl $1, %eax; movl $0, %ebx; div %ebx"); // This will cause a divide error exception
-    } else if (strings_equal(command, "heap")) {
-        uint32_t heap_start = memory_get_heap_start();
-        uint32_t heap_current = memory_get_heap_current();
-        terminal_write("Heap Start: 0x");
-        terminal_write_hex32(heap_start);
-        terminal_write("\nHeap Current: 0x");
-        terminal_write_hex32(heap_current);
-        terminal_write("\n");
-    } else if (strings_equal(command, "alloc")) {
-        void *ptr1 = kmalloc(64);
-        terminal_write("Allocated 64 bytes at 0x");
-        terminal_write_hex32((uint32_t)ptr1);
-        terminal_write("\n");
-    } else if (strings_equal(command, "memcpy")) {
-        colorshell_write("Creating source buffer with values 0x00 to 0x0F\nand copying to destination buffer...\n", "info");
-        uint8_t* src = kmalloc(16);
-        uint8_t* dest = kmalloc(16);
-        for (int i = 0; i < 16; i++) {
-            src[i] = (uint8_t)i;
-        }
-        memcpy(dest, src, 16);
-        colorshell_write("SRC: ", "output");
-        shell_dump_bytes((const uint8_t*)src, 16);
-        colorshell_write("DST: ", "output");
-        shell_dump_bytes((const uint8_t*)dest, 16);
-        terminal_write("\n");
-    } else if (strings_equal(command, "memset")) {
-        colorshell_write("Allocating buffer and setting all bytes to 0xAB...\n", "info");
-        uint8_t* buffer = (uint8_t*)kmalloc(16);
-        memset(buffer, 0xAB, 16);
-        colorshell_write("Buffer after memset: ", "output");
-        shell_dump_bytes(buffer, 16);
-        terminal_write("\n");
-    } else if (strings_equal(command, "strlen")) {
-        const char* s1 = "";
-        const char* s2 = "A";
-        const char* s3 = "Hello";
-        const char* s4 = "Frewozet Kernel";
+static void shell_load_buffer(const char* text) {
+    size_t i = 0;
 
-        terminal_write("strlen tests:\n");
+    while (text[i] != '\0' && i < SHELL_BUFFER_SIZE - 1) {
+        shell_buffer[i] = text[i];
+        colorshell_writechar(text[i], "default");
+        i++;
+    }
 
-        terminal_write("\"\" = ");
-        terminal_write_decimal(strlen(s1));
-        terminal_write("\n");
+    shell_buffer[i] = '\0';
+    shell_buffer_length = i;
+}
 
-        terminal_write("\"A\" = ");
-        terminal_write_decimal(strlen(s2));
-        terminal_write("\n");
-
-        terminal_write("\"Hello\" = ");
-        terminal_write_decimal(strlen(s3));
-        terminal_write("\n");
-
-        terminal_write("\"Frewozet Kernel\" = ");
-        terminal_write_decimal(strlen(s4));
-        terminal_write("\n");
-
-        return;
-    } else if (strings_equal(command, "strcmp")) {
-        terminal_write("strcmp tests:\n");
-
-        terminal_write("abc vs abc = ");
-        terminal_write_decimal(strcmp("abc", "abc"));
-        terminal_write("\n");
-
-        terminal_write("abc vs abd = ");
-        terminal_write_decimal(strcmp("abc", "abd"));
-        terminal_write("\n");
-
-        terminal_write("abd vs abc = ");
-        terminal_write_decimal(strcmp("abd", "abc"));
-        terminal_write("\n");
-
-        terminal_write("abc vs ab = ");
-        terminal_write_decimal(strcmp("abc", "ab"));
-        terminal_write("\n");
-
-        terminal_write("ab vs abc = ");
-        terminal_write_decimal(strcmp("ab", "abc"));
-        terminal_write("\n");
-
-        return;
-    } else if (strings_equal(command, "strncmp")) {
-        terminal_write("strncmp tests:\n");
-
-        terminal_write("abc vs abc (3) = ");
-        terminal_write_decimal(strncmp("abc", "abc", 3));
-        terminal_write("\n");
-
-        terminal_write("abc vs abd (2) = ");
-        terminal_write_decimal(strncmp("abc", "abd", 2));
-        terminal_write("\n");
-
-        terminal_write("abc vs abd (3) = ");
-        terminal_write_decimal(strncmp("abc", "abd", 3));
-        terminal_write("\n");
-
-        terminal_write("abc vs ab (3) = ");
-        terminal_write_decimal(strncmp("abc", "ab", 3));
-        terminal_write("\n");
-
-        terminal_write("ab vs abc (2) = ");
-        terminal_write_decimal(strncmp("ab", "abc", 2));
-        terminal_write("\n");
-
+static void shell_history_add(const char* line) {
+    // Don't add empty lines to history
+    if (line[0] == '\0') {
         return;
     }
-    
-    else {
-        terminal_write("Unknown command: ");
-        terminal_write(command);
+
+    // Avoid adding duplicate consecutive entries
+    if (shell_history_count > 0) {
+        int newest = (shell_history_next_index - 1 + SHELL_HISTORY_SIZE) % SHELL_HISTORY_SIZE;
+        if (strcmp(shell_history[newest], line) == 0) {
+            return;
+        }
+    }
+
+    // Add the line to history
+    size_t i = 0;
+    while (line[i] != '\0' && i < SHELL_BUFFER_SIZE - 1) {
+        shell_history[shell_history_next_index][i] = line[i];
+        i++;
+    }
+    shell_history[shell_history_next_index][i] = '\0';
+
+    // Update indices
+    shell_history_next_index = (shell_history_next_index + 1) % SHELL_HISTORY_SIZE;
+
+    // Update count (max is SHELL_HISTORY_SIZE)
+    if (shell_history_count < SHELL_HISTORY_SIZE) {
+        shell_history_count++;
+    }
+}
+
+static int shell_history_physical_index(int history_offset_from_newest) {
+    return (shell_history_next_index - 1 - history_offset_from_newest + SHELL_HISTORY_SIZE) % SHELL_HISTORY_SIZE;
+}
+
+void shell_history_prev(void) {
+    // If history is empty, do nothing
+    if (shell_history_count == 0) {
+        return;
+    }
+
+    if (shell_history_view_index == -1) {
+        shell_history_view_index = 0;   /* newest */
+    } else if (shell_history_view_index < shell_history_count - 1) {
+        shell_history_view_index++;
+    } else {
+        return;
+    }
+
+    shell_clear_onscreen_command();
+
+    // Load the command from history into the buffer and display it
+    int idx = shell_history_physical_index(shell_history_view_index);
+    shell_load_buffer(shell_history[idx]);
+}
+
+void shell_history_next(void) {
+    // If history is empty or we're not currently viewing history, do nothing
+    if (shell_history_count == 0 || shell_history_view_index == -1) {
+        return;
+    }
+
+    shell_clear_onscreen_command();
+
+    if (shell_history_view_index > 0) {
+        shell_history_view_index--;
+        int idx = shell_history_physical_index(shell_history_view_index);
+        shell_load_buffer(shell_history[idx]);
+    } else {
+        shell_history_view_index = -1;
+        shell_buffer[0] = '\0';
+        shell_buffer_length = 0;
+    }
+}
+
+void shell_history_print() {
+    // If history is empty, print a message, should be impossible as history command itself will always be shown
+    if (shell_history_count == 0) {
+        colorshell_write("No history.\n", "error");
+        return;
+    }
+
+    // Calculate the starting index for the oldest command to display
+    int start = (shell_history_next_index - shell_history_count + SHELL_HISTORY_SIZE) % SHELL_HISTORY_SIZE;
+
+    colorshell_write("Frewozet Shell command history for 16 most recent commands:\n", "info");
+    colorshell_write("Use Up/Down arrow keys to navigate through history.\n", "prompt");
+
+    // Print the history entries with their relative indices
+    for (int i = 0; i < shell_history_count; i++) {
+        int idx = (start + i) % SHELL_HISTORY_SIZE;
+
+        terminal_write_decimal(-(shell_history_count - i));
+        terminal_write(": ");
+        terminal_write(shell_history[idx]);
         terminal_write("\n");
     }
 }
@@ -217,27 +145,33 @@ void shell_init(void) {
 }
 
 void shell_handle_char(char c) {
-    if (c == '\n') {
+    if (c == '\n') { // Enter key, run command
         terminal_write("\n");
-        shell_buffer[shell_buffer_length] = '\0';
-        shell_execute_command(shell_buffer);
+        shell_history_add(shell_buffer);
+        char* argv[SHELL_MAX_ARGS];
+        int argc = shell_tokenize(shell_buffer, argv, SHELL_MAX_ARGS);
+        shell_history_view_index = -1;
+        shell_execute_command(argc, argv);
         shell_buffer_length = 0;
         shell_buffer[0] = '\0';
         shell_print_prompt();
-    } else if (c == '\b') {
+    } else if (c == '\b') { // Backspace
         if (shell_buffer_length > 0) {
             shell_buffer_length--;
+            shell_history_view_index = -1;
             terminal_backspace();
             shell_buffer[shell_buffer_length] = '\0';
         }
-    } else if (shell_buffer_length < SHELL_BUFFER_SIZE - 1) {
+    } else if (shell_buffer_length < SHELL_BUFFER_SIZE - 1) { // Regular character
         shell_buffer[shell_buffer_length++] = c;
         shell_buffer[shell_buffer_length] = '\0';
+        shell_history_view_index = -1;
         colorshell_writechar(c, "default");
-    } else {
+    } else { // Buffer overflow, reset buffer and print error
         terminal_write("\nFREWOZET SHELL ERROR: Command buffer overflow.\n");
         shell_buffer_length = 0;
         shell_buffer[0] = '\0';
+        shell_history_view_index = -1;
         shell_print_prompt();
     }
 }

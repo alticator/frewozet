@@ -14,4 +14,8 @@
 void shell_init(void);
 void shell_handle_char(char c);
 
+void shell_history_prev(void);
+void shell_history_next(void);
+void shell_history_print(void);
+
 #endif

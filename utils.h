@@ -6,5 +6,6 @@
 uint32_t parse_uint(const char** str, int* ok);
 int strings_equal(const char* a, const char* b);
 int string_starts_with(const char* str, const char* prefix);
+void format_bytes(uint64_t bytes, char* out);
 
 #endif

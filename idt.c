@@ -80,14 +80,6 @@ static void idt_set_gate(uint8_t num, uint32_t handler, uint16_t selector, uint8
     idt[num].offset_high = (uint16_t)((handler >> 16) & 0xFFFF);
 }
 
-static void terminal_write_hex32(uint32_t value) {
-    const char* digits = "0123456789ABCDEF";
-    terminal_write("0x");
-    for (int shift = 28; shift >= 0; shift -= 4) {
-        terminal_writechar(digits[(value >> shift) & 0xF]);
-    }
-}
-
 void idt_init(void) {
     for (int i = 0; i < 256; i++) {
         idt_set_gate((uint8_t)i, 0, 0, 0);

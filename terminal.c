@@ -95,6 +95,18 @@ void terminal_write_hex32(uint32_t value) {
     }
 }
 
+void terminal_write_hex64(uint64_t value) {
+    for (int shift = 60; shift >= 0; shift -= 4) {
+        terminal_write_hex_digit((value >> shift) & 0x0F);
+    }
+}
+
+void terminal_write_bytesize(uint64_t value) {
+    char buffer[32];
+    format_bytes(value, buffer);
+    terminal_write(buffer);
+}
+
 static uint8_t get_colorshell_color(const char* type) {
     uint8_t color = 0x07; // Default gray
     if (color_mode) {
@@ -109,7 +121,7 @@ static uint8_t get_colorshell_color(const char* type) {
         } else if (strings_equal(type, "prompt")) {
             color = 0x0D; // Light green for prompts
         } else if (strings_equal(type, "command")) {
-            color = 0x0B; // Light cyan for commands
+            color = 0x0F; // Bright white for commands
         } else if (strings_equal(type, "output")) {
             color = 0x0F; // Bright white for command output
         }
