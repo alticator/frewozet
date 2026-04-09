@@ -3,12 +3,11 @@
 #include "ram_mapper.h"
 #include "memory.h"
 
-#include "terminal.h"
-
 extern uint8_t _kernel_end;
 
 static uint32_t* pmm_bitmap = 0;
 static uint32_t pmm_total_pages = 0;
+static uint32_t pmm_total_usable_pages = 0;
 static uint32_t pmm_used_pages = 0;
 static uint64_t pmm_total_usable_bytes = 0;
 
@@ -52,7 +51,6 @@ static void pmm_mark_range_free(uint32_t start_addr, uint32_t end_addr) {
     uint32_t end = align_down_u32(end_addr, PMM_PAGE_SIZE);
 
     if (end <= start) {
-        terminal_write("End > Start\n");
         return;
     }
 
@@ -74,6 +72,7 @@ void pmm_init(void) {
 
     uint64_t highest_addr = 0;
     pmm_total_usable_bytes = 0;
+    pmm_total_usable_pages = 0;
 
     for (uint16_t i = 0; i < info->count; i++) {
         const struct e820_entry* entry = &info->entries[i];
@@ -118,11 +117,6 @@ void pmm_init(void) {
         }
         uint32_t start = (uint32_t)entry->base;
         uint32_t end = (uint32_t)region_end_64;
-        terminal_write("\nPMM FOUND USABLE PAGE <from ");
-        terminal_write_bytesize((uint64_t)start);
-        terminal_write(" to ");
-        terminal_write_bytesize((uint64_t)end);
-        terminal_write(">\n");
         pmm_mark_range_free(start, end);
     }
     pmm_mark_range_used(0x00000000u, 0x00100000u);
