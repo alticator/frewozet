@@ -2,6 +2,8 @@
 #include "idt.h"
 #include "pic.h"
 #include "shell.h"
+#include "memory.h"
+#include "pmm.h"
 
 void kmain(void) {
     volatile uint16_t* const vga = (volatile uint16_t*)0xB8000;
@@ -19,8 +21,11 @@ void kmain(void) {
     terminal_write("Starting PIC remapping....");
     pic_remap(32, 40);
     terminal_write("  OK\n");
-    terminal_write("Initializing memory management....");
+    terminal_write("Initializing memory....");
     memory_init();
+    terminal_write("  OK\n");
+    terminal_write("Initializing physical memory management....");
+    pmm_init();
     terminal_write("  OK\n");
     terminal_write("Enabling interrupts....");
     __asm__ __volatile__("sti");

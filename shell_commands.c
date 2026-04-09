@@ -8,6 +8,7 @@
 #include "idt.h"
 #include "shell.h"
 #include "ram_mapper.h"
+#include "pmm.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -190,6 +191,9 @@ static void cmd_debug(int argc, char** argv);
 static void cmd_meminfo(int argc, char** argv);
 static void cmd_heap(int argc, char** argv);
 static void cmd_alloc(int argc, char** argv);
+static void cmd_pmminfo(int argc, char** argv);
+// static void cmd_allocpage(int argc, char** argv);
+// static void cmd_freepage(int argc, char** argv);
 static void cmd_memcpy(int argc, char** argv);
 static void cmd_memset(int argc, char** argv);
 static void cmd_strlen(int argc, char** argv);
@@ -211,6 +215,9 @@ static const struct shell_command shell_commands[] = {
     {"meminfo",    cmd_meminfo,    "meminfo                       - Show E820 memory map"},
     {"heap",       cmd_heap,       "heap                          - Show heap pointers"},
     {"alloc",      cmd_alloc,      "alloc                         - Allocate 64 bytes"},
+    {"pmminfo",    cmd_pmminfo,    "pmminfo                       - Show physical memory manager info"},
+    //{"allocpage",  cmd_allocpage,  "allocpage                     - Allocate one 4 KiB physical page"},
+    //{"freepage",   cmd_freepage,   "freepage <hexaddr>            - Free one 4 KiB physical page"},
     {"memcpy",     cmd_memcpy,     "memcpy                        - Test memcpy"},
     {"memset",     cmd_memset,     "memset                        - Test memset"},
     {"strlen",     cmd_strlen,     "strlen <string>               - String length"},
@@ -471,6 +478,25 @@ static void cmd_alloc(int argc, char** argv) {
     }
     terminal_write("Allocated 64 bytes at 0x");
     terminal_write_hex32((uint32_t)ptr1);
+    terminal_write("\n");
+}
+
+static void cmd_pmminfo(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+
+    terminal_write("PMM Total Pages: ");
+    terminal_write_decimal((int)pmm_get_total_pages());
+    terminal_write("\nPMM Used Pages: ");
+    terminal_write_decimal((int)pmm_get_used_pages());
+    terminal_write("\nPMM Free Pages: ");
+    terminal_write_decimal((int)pmm_get_free_pages());
+    terminal_write("\nUsable RAM: ");
+    terminal_write_bytesize(pmm_get_total_usable_bytes());
+    terminal_write("\nUsed RAM (tracked pages): ");
+    terminal_write_bytesize(pmm_get_total_used_bytes());
+    terminal_write("\nFree RAM (tracked pages): ");
+    terminal_write_bytesize(pmm_get_total_free_bytes());
     terminal_write("\n");
 }
 
