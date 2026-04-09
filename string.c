@@ -60,7 +60,6 @@ int strnequal(const char* a, const char* b, size_t n) {
 }
 
 void str_append(char* dest, size_t *pos, const char* src) {
-    size_t i = 0;
     while (*src != '\0') {
         dest[(*pos)++] = *src++;
     }

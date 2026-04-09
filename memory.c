@@ -20,7 +20,7 @@ static int find_heap_region(uint32_t kernel_end_addr, uint32_t* out_start, uint3
     if (!ram_mapper_available()) {
         return 0;
     }
-    struct e820_info* info = ram_mapper_get_info();
+    const struct e820_info* info = ram_mapper_get_info();
     for (uint16_t i = 0; i < info->count; i++) {
         const struct e820_entry* entry = &info->entries[i];
         if (entry->type != 1 || entry->base > 0xFFFFFFFFull) {
