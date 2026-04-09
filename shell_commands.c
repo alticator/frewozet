@@ -485,17 +485,22 @@ static void cmd_pmminfo(int argc, char** argv) {
     (void)argc;
     (void)argv;
 
-    terminal_write("PMM Total Pages: ");
+    colorshell_write("Frewozet Physcal Memory Manager\n", "prompt");
+    colorshell_write("Tracked Pages: ", "info");
     terminal_write_decimal((int)pmm_get_total_pages());
-    terminal_write("\nPMM Used Pages: ");
+    colorshell_write("\nUsable Pages: ", "info");
+    terminal_write_decimal((int)pmm_get_total_usable_pages());
+    colorshell_write("\nUsed Pages: ", "info");
     terminal_write_decimal((int)pmm_get_used_pages());
-    terminal_write("\nPMM Free Pages: ");
+    colorshell_write("\nFree Pages: ", "info");
     terminal_write_decimal((int)pmm_get_free_pages());
-    terminal_write("\nUsable RAM: ");
+    colorshell_write("\n\nTracked address space: ", "info");
+    terminal_write_bytesize(pmm_get_total_bytes());
+    colorshell_write("\nUsable RAM: ", "info");
     terminal_write_bytesize(pmm_get_total_usable_bytes());
-    terminal_write("\nUsed RAM (tracked pages): ");
+    colorshell_write("\nUsed RAM (tracked pages): ", "info");
     terminal_write_bytesize(pmm_get_total_used_bytes());
-    terminal_write("\nFree RAM (tracked pages): ");
+    colorshell_write("\nFree RAM (tracked pages): ", "info");
     terminal_write_bytesize(pmm_get_total_free_bytes());
     terminal_write("\n");
 }

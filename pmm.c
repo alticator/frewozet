@@ -48,7 +48,7 @@ static void pmm_mark_range_used(uint32_t start_addr, uint32_t end_addr) {
 
 static void pmm_mark_range_free(uint32_t start_addr, uint32_t end_addr) {
     uint32_t start = align_up_u32(start_addr, PMM_PAGE_SIZE);
-    uint32_t end = align_down_u32(end_addr, PMM_PAGE_SIZE);
+    uint32_t end   = align_down_u32(end_addr, PMM_PAGE_SIZE);
 
     if (end <= start) {
         return;
@@ -59,7 +59,6 @@ static void pmm_mark_range_free(uint32_t start_addr, uint32_t end_addr) {
         if (page < pmm_total_pages && pmm_test_bit(page)) {
             pmm_clear_bit(page);
             pmm_used_pages--;
-        } else {
         }
     }
 }
@@ -68,25 +67,47 @@ void pmm_init(void) {
     if (!ram_mapper_available()) {
         return;
     }
+
     const struct e820_info* info = ram_mapper_get_info();
 
     uint64_t highest_addr = 0;
     pmm_total_usable_bytes = 0;
     pmm_total_usable_pages = 0;
 
+    /* First loop through E820 entries:
+       - find the highest tracked physical address
+       - sum usable bytes
+       - count usable pages */
     for (uint16_t i = 0; i < info->count; i++) {
         const struct e820_entry* entry = &info->entries[i];
-        uint64_t end = entry->base + entry->length;
-        if (end > highest_addr) {
-            highest_addr = end;
+
+        uint64_t region_end_64 = entry->base + entry->length;
+        if (region_end_64 > highest_addr) {
+            highest_addr = region_end_64;
         }
+
         if (entry->type == 1) {
             pmm_total_usable_bytes += entry->length;
+
+            if (entry->base < 0x100000000ull) {
+                if (region_end_64 > 0x100000000ull) {
+                    region_end_64 = 0x100000000ull;
+                }
+
+                uint32_t usable_start = align_up_u32((uint32_t)entry->base, PMM_PAGE_SIZE);
+                uint32_t usable_end   = align_down_u32((uint32_t)region_end_64, PMM_PAGE_SIZE);
+
+                if (usable_end > usable_start) {
+                    pmm_total_usable_pages += (usable_end - usable_start) / PMM_PAGE_SIZE;
+                }
+            }
         }
     }
+
     if (highest_addr > 0x100000000ull) {
         highest_addr = 0x100000000ull;
     }
+
     pmm_total_pages = (uint32_t)(highest_addr / PMM_PAGE_SIZE);
     if (pmm_total_pages == 0) {
         return;
@@ -99,29 +120,43 @@ void pmm_init(void) {
     if (!pmm_bitmap) {
         return;
     }
+
+    /* Start with every tracked page marked used */
     for (uint32_t i = 0; i < bitmap_words; i++) {
         pmm_bitmap[i] = 0xFFFFFFFFu;
     }
     pmm_used_pages = pmm_total_pages;
+
+    /* Second loop:
+        - only free usable RAM pages */
     for (uint16_t i = 0; i < info->count; i++) {
         const struct e820_entry* entry = &info->entries[i];
+
         if (entry->type != 1) {
             continue;
         }
-        if (entry->base > 0x100000000ull) {
+
+        if (entry->base >= 0x100000000ull) {
             continue;
         }
+
         uint64_t region_end_64 = entry->base + entry->length;
         if (region_end_64 > 0x100000000ull) {
             region_end_64 = 0x100000000ull;
         }
+
         uint32_t start = (uint32_t)entry->base;
-        uint32_t end = (uint32_t)region_end_64;
+        uint32_t end   = (uint32_t)region_end_64;
+
         pmm_mark_range_free(start, end);
     }
+
+    /* Reserve low memory, kernel, and bitmap storage */
     pmm_mark_range_used(0x00000000u, 0x00100000u);
+
     uint32_t kernel_end = (uint32_t)&_kernel_end;
-    pmm_mark_range_used(0x00000000, kernel_end);
+    pmm_mark_range_used(0x00000000u, kernel_end);
+
     uint32_t bitmap_start = (uint32_t)pmm_bitmap;
     pmm_mark_range_used(bitmap_start, bitmap_start + bitmap_bytes);
 }
@@ -162,12 +197,34 @@ uint32_t pmm_get_total_pages(void) {
     return pmm_total_pages;
 }
 
-uint32_t pmm_get_used_pages(void) {
-    return pmm_used_pages;
+uint32_t pmm_get_total_usable_pages(void) {
+    return pmm_total_usable_pages;
 }
 
 uint32_t pmm_get_free_pages(void) {
-    return pmm_total_pages - pmm_used_pages;
+    uint32_t free_pages = 0;
+    if (!pmm_bitmap) {
+        return 0;
+    }
+    for (uint32_t page = 0; page < pmm_total_pages; page++) {
+        if (!pmm_test_bit(page)) {
+            free_pages++;
+        }
+    }
+
+    return free_pages;
+}
+
+uint32_t pmm_get_used_pages(void) {
+    uint32_t free_pages = pmm_get_free_pages();
+    if (pmm_total_usable_pages >= free_pages) {
+        return pmm_total_usable_pages - free_pages;
+    }
+    return 0;
+}
+
+uint64_t pmm_get_total_bytes(void) {
+    return (uint64_t)pmm_get_total_pages() * PMM_PAGE_SIZE;
 }
 
 uint64_t pmm_get_total_usable_bytes(void) {
