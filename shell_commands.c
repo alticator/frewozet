@@ -100,8 +100,8 @@ static void shell_run_calc_argv(int argc, char** argv) {
         }
 
         op = expr[i];
-        if (op != '+' && op != '-' && op != '*' && op != '/') {
-            colorshell_write("FREWOZET CALC ERROR: Expected operator (+, -, *, /).\n", "error");
+        if (op != '+' && op != '-' && op != '*' && op != '/' && op != '^') {
+            colorshell_write("FREWOZET CALC ERROR: Expected operator (+, -, *, /, ^).\n", "error");
             return;
         }
         i++;
@@ -127,8 +127,8 @@ static void shell_run_calc_argv(int argc, char** argv) {
         }
 
         op = argv[2][0];
-        if (op != '+' && op != '-' && op != '*' && op != '/') {
-            colorshell_write("FREWOZET CALC ERROR: Expected operator (+, -, *, /).\n", "error");
+        if (op != '+' && op != '-' && op != '*' && op != '/' && op != '^') {
+            colorshell_write("FREWOZET CALC ERROR: Expected operator (+, -, *, /, ^).\n", "error");
             return;
         }
 
@@ -175,6 +175,16 @@ static void shell_run_calc_argv(int argc, char** argv) {
         terminal_write("\n");
         return;
     }
+
+    if (op == '^') {
+        uint32_t result = 1;
+        for (uint32_t i = 0; i < right; i++) {
+            result *= left;
+        }
+        terminal_write_decimal((int)result);
+        terminal_write("\n");
+        return;
+    }
 }
 
 static void cmd_help(int argc, char** argv);
@@ -214,7 +224,7 @@ static const struct shell_command shell_commands[] = {
     {"debug",      cmd_debug,      "debug dividezero              - Trigger divide error"},
     {"meminfo",    cmd_meminfo,    "meminfo                       - Show E820 memory map"},
     {"heap",       cmd_heap,       "heap                          - Show heap pointers"},
-    {"alloc",      cmd_alloc,      "alloc                         - Allocate 64 bytes"},
+    {"alloc",      cmd_alloc,      "alloc <?size>                 - Allocate memory from heap. Default 64 bytes"},
     {"pmminfo",    cmd_pmminfo,    "pmminfo                       - Show physical memory manager info"},
     //{"allocpage",  cmd_allocpage,  "allocpage                     - Allocate one 4 KiB physical page"},
     //{"freepage",   cmd_freepage,   "freepage <hexaddr>            - Free one 4 KiB physical page"},
@@ -242,10 +252,7 @@ static void cmd_help(int argc, char** argv) {
 
     colorshell_write("Frewozet Shell Help:\n", "info");
     colorshell_write("Frewozet Special Keyboard Layout:\n", "info");
-    colorshell_write("  - The '+' key is located where '=' is on a standard UK QWERTY layout.\n", "info");
-    colorshell_write("  - The '*' key is located where '.' is on a standard UK QWERTY layout.\n", "info");
-    colorshell_write("  - The '.' key is located where ',' is on a standard UK QWERTY layout.\n", "info");
-    colorshell_write("  - The '\"' key is located where ';' is on a standard UK QWERTY layout.\n", "info");
+    colorshell_write("HERE:UK_LAYOUT '+':'=', '*':'.', '.':',', '\"':';', '^':'`'\n", "info");
     colorshell_write("Available commands:\n", "info");
 
     for (size_t i = 0; i < shell_command_count; i++) {
@@ -455,28 +462,56 @@ static void cmd_meminfo(int argc, char** argv) {
 static void cmd_heap(int argc, char** argv) {
     (void)argc;
     (void)argv;
-    uint32_t heap_start = memory_get_heap_start();
-    uint32_t heap_current = memory_get_heap_current();
-    terminal_write("Heap Start: 0x");
-    terminal_write_hex32(heap_start);
-    terminal_write("\nHeap Current: 0x");
-    terminal_write_hex32(heap_current);
-    terminal_write("\nHeap Limit: 0x");
-    terminal_write_hex32(memory_get_heap_limit());
-    terminal_write("\nHeap Remaining: ");
-    terminal_write_bytesize(memory_get_heap_remaining());
+    if (!memory_is_pmm_backend_enabled()) {
+        uint32_t heap_start = memory_get_heap_start();
+        uint32_t heap_current = memory_get_heap_current();
+        colorshell_write("Using Backend: Bootstrap\n", "info");
+        colorshell_write("Heap Start: 0x", "info");
+        terminal_write_hex32(heap_start);
+        colorshell_write("\nHeap Current: 0x", "info");
+        terminal_write_hex32(heap_current);
+        colorshell_write("\nHeap Limit: 0x", "info");
+        terminal_write_hex32(memory_get_heap_limit());
+        colorshell_write("\nHeap Remaining: ", "info");
+        terminal_write_bytesize(memory_get_heap_remaining());
+        terminal_write("\n");
+        return;
+    }
+    uint32_t committed = memory_get_heap_committed_bytes();
+    uint32_t used = memory_get_heap_used_bytes();
+    uint32_t free = memory_get_heap_free_bytes();
+
+    colorshell_write("Using backend: ", "info");
+    colorshell_write("Frewozet Physical Memory Manager\n", "command");
+    colorshell_write("Committed Heap Memory: ", "info");
+    terminal_write_bytesize(committed);
+    colorshell_write("\nUsed Heap Memory: ", "info");
+    terminal_write_bytesize(used);
+    colorshell_write("\nFree Heap Memory: ", "info");
+    terminal_write_bytesize(free);
     terminal_write("\n");
 }
 
 static void cmd_alloc(int argc, char** argv) {
     (void)argc;
     (void)argv;
-    void *ptr1 = kmalloc(64);
+    size_t alloc_size = 64;
+    if (argc >= 2) {
+        uint32_t parsed_size;
+        if (!shell_parse_uint32(argv[1], &parsed_size)) {
+            colorshell_write("Invalid size argument. Using default 64 bytes.\n", "warning");
+        } else {
+            alloc_size = (size_t)parsed_size;
+        }
+    }
+    void *ptr1 = kmalloc(alloc_size);
     if (!ptr1) {
         colorshell_write("Allocation failed\n", "error");
         return;
     }
-    terminal_write("Allocated 64 bytes at 0x");
+    terminal_write("Allocated ");
+    terminal_write_decimal((int)alloc_size);
+    terminal_write(" bytes at 0x");
     terminal_write_hex32((uint32_t)ptr1);
     terminal_write("\n");
 }

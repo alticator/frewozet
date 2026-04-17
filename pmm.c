@@ -161,36 +161,62 @@ void pmm_init(void) {
     pmm_mark_range_used(bitmap_start, bitmap_start + bitmap_bytes);
 }
 
-void* pmm_alloc_page(void) {
-    if (!pmm_bitmap) {
+void* pmm_alloc_contiguous(uint32_t page_count) {
+    if (!pmm_bitmap || page_count == 0) {
         return 0;
     }
+    uint32_t run_start = 0;
+    uint32_t run_len = 0;
+
     for (uint32_t page = 0; page < pmm_total_pages; page++) {
         if (!pmm_test_bit(page)) {
-            pmm_set_bit(page);
-            pmm_used_pages++;
-            return (void*)(page * PMM_PAGE_SIZE);
+            if (run_len == 0) {
+                run_start = page;
+            }
+            run_len++;
+            if (run_len == page_count) {
+                for (uint32_t i = 0; i < page_count; i++) {
+                    pmm_set_bit(run_start + i);
+                }
+                return (void*)((run_start) * PMM_PAGE_SIZE);
+            }
+        } else {
+            run_len = 0;
         }
     }
     return 0;
 }
 
+void pmm_free_contiguous(void* start_page, uint32_t page_count) {
+    if (!pmm_bitmap || page_count == 0) {
+        return;
+    }
+    uint32_t start_addr = (uint32_t)start_page;
+    if (start_addr % PMM_PAGE_SIZE != 0) {
+        // Invalid page address
+        return;
+    }
+    uint32_t start_index = start_addr / PMM_PAGE_SIZE;
+    if (start_addr >= pmm_total_pages) {
+        return;
+    }
+    for (uint32_t i = 0; i < page_count; i++) {
+        uint32_t page = start_index + i;
+        if (page >= pmm_total_pages) {
+            break;
+        }
+        if (pmm_test_bit(page)) {
+            pmm_clear_bit(page);
+        }
+    }
+}
+
+void* pmm_alloc_page(void) {
+    return pmm_alloc_contiguous(1);
+}
+
 void pmm_free_page(void* page_ptr) {
-    if (!pmm_bitmap || !page_ptr) {
-        return;
-    }
-    uint32_t addr = (uint32_t)page_ptr;
-    if (addr % PMM_PAGE_SIZE != 0) {
-        return;
-    }
-    uint32_t page = addr / PMM_PAGE_SIZE;
-    if (page >= pmm_total_pages) {
-        return;
-    }
-    if (pmm_test_bit(page)) {
-        pmm_clear_bit(page);
-        pmm_used_pages--;
-    }
+    return pmm_free_contiguous(page_ptr, 1);
 }
 
 uint32_t pmm_get_total_pages(void) {

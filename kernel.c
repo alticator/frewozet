@@ -27,6 +27,9 @@ void kmain(void) {
     terminal_write("Initializing physical memory management....");
     pmm_init();
     terminal_write("  OK\n");
+    terminal_write("Enabling PMM heap backend....");
+    memory_enable_pmm_backend();
+    terminal_write("  OK\n");
     terminal_write("Enabling interrupts....");
     __asm__ __volatile__("sti");
     terminal_write("  OK\n\n");

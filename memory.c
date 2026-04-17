@@ -1,13 +1,29 @@
 #include "memory.h"
 #include "terminal.h"
 #include "ram_mapper.h"
+#include "string.h"
+#include "pmm.h"
 
 extern uint32_t _kernel_end;
 
-static uint32_t heap_start = 0;
-static uint32_t heap_current = 0;
-static uint32_t heap_limit = 0;
+#define MEMORY_DEFAULT_ALIGNMENT 16
+#define MEMORY_HEAP_GROW_PAGES 4
+#define MEMORY_MIN_SPLIT 16
 
+typedef struct heap_block {
+    size_t size;
+    uint32_t free;
+    struct heap_block *next;
+} heap_block_t;
+
+static uint32_t bootstrap_heap_start = 0;
+static uint32_t bootstrap_heap_current = 0;
+static uint32_t bootstrap_heap_limit = 0;
+
+static heap_block_t* heap_head;
+static int memory_pmm_backend_enabled = 0;
+
+// Should be replaced by align_up_u32 in pmm.h
 static uint32_t align_up(uint32_t addr, uint32_t alignment) {
     if (alignment == 0) {
         return addr; // No alignment needed
@@ -16,7 +32,12 @@ static uint32_t align_up(uint32_t addr, uint32_t alignment) {
     return (addr + mask) & ~mask;
 }
 
-static int find_heap_region(uint32_t kernel_end_addr, uint32_t* out_start, uint32_t* out_limit) {
+static size_t align_up_size(size_t value, uint32_t alignment) {
+    size_t mask = alignment - 1;
+    return (value + mask) & ~mask;
+}
+
+static int find_bootstrap_region(uint32_t kernel_end_addr, uint32_t* out_start, uint32_t* out_limit) {
     if (!ram_mapper_available()) {
         return 0;
     }
@@ -50,39 +71,152 @@ static int find_heap_region(uint32_t kernel_end_addr, uint32_t* out_start, uint3
     return 0; // No suitable region found
 }
 
-void memory_init(void) {
-    uint32_t kernel_end_addr = (uint32_t)&_kernel_end;
-    if (find_heap_region(kernel_end_addr, &heap_start, &heap_limit)) {
-        heap_current = heap_start;
-    } else {
-        // No suitable region found, fallback to a default heap start (e.g., 1MB)
-        heap_start = align_up(kernel_end_addr, 16);
-        heap_current = heap_start;
-        heap_limit = 0x90000; // Kernel at 0x10000, stack at 0x90000
-    }
-}
-
-void* kmalloc_aligned(size_t size, size_t alignment) {
+void* bootstrap_alloc_aligned(size_t size, size_t alignment) {
     if (size == 0) {
         return (void*)0;
     }
     if (alignment == 0) {
         alignment = 16; // Default alignment
     }
-    uint32_t aligned = align_up(heap_current, (uint32_t)alignment);
-    if (aligned < heap_current) {
+    uint32_t aligned = align_up(bootstrap_heap_current, (uint32_t)alignment);
+    if (aligned < bootstrap_heap_current) {
         return (void*)0; // Overflow
     }
-    if (aligned + (uint32_t)size > heap_limit) {
+    if (aligned + (uint32_t)size > bootstrap_heap_limit) {
         return (void*)0; // Not enough space
     }
     void* addr = (void*)aligned;
-    heap_current = aligned + (uint32_t)size;
+    bootstrap_heap_current = aligned + (uint32_t)size;
     return addr;
 }
 
+static void heap_add_region(void* region, size_t region_size) {
+    if (region_size <= sizeof(heap_block_t)) {
+        return;
+    }
+    heap_block_t* block = (heap_block_t*)region;
+    block->size = region_size - sizeof(heap_block_t);
+    block->free = 1;
+    block->next = 0;
+    if (!heap_head) {
+        heap_head = block;
+        return;
+    }
+    heap_block_t* current = heap_head;
+    while (current->next) {
+        current = current->next;
+    }
+    current->next = block;
+}
+
+static heap_block_t* heap_find_free_block(size_t size) {
+    heap_block_t* current = heap_head;
+    while (current) {
+        if (current-> free && current->size >= size) {
+            return current;
+        }
+        current = current->next;
+    }
+    return 0;
+}
+
+static void heap_split_block(heap_block_t* block, size_t size) {
+    if (!block) {
+        return;
+    }
+    size_t aligned_size = align_up_size(size, MEMORY_DEFAULT_ALIGNMENT);
+    if (block->size <= aligned_size + sizeof(heap_block_t) + MEMORY_MIN_SPLIT) {
+        return;
+    }
+    uint8_t* raw = (uint8_t*)block;
+    heap_block_t* new_block = (heap_block_t*)(raw + sizeof(heap_block_t) + aligned_size);
+
+    new_block->size = block->size - aligned_size - sizeof(heap_block_t);
+    new_block->free = 1;
+    new_block->next = block->next;
+
+    block->size = aligned_size;
+    block->next = new_block;
+}
+
+static int heap_grow(size_t minimum_payload_size) {
+    size_t bytes_needed = minimum_payload_size + sizeof(heap_block_t);
+    uint32_t pages = (uint32_t)((bytes_needed + PMM_PAGE_SIZE - 1) / PMM_PAGE_SIZE);
+    if (pages < MEMORY_HEAP_GROW_PAGES) {
+        pages = MEMORY_HEAP_GROW_PAGES;
+    }
+    void* region = pmm_alloc_contiguous(pages);
+    if (!region) {
+        return 0;
+    }
+    heap_add_region(region, (size_t)pages * PMM_PAGE_SIZE);
+    return 1;
+}
+
+void memory_init(void) {
+    uint32_t kernel_end_addr = (uint32_t)&_kernel_end;
+    if (find_bootstrap_region(kernel_end_addr, &bootstrap_heap_start, &bootstrap_heap_limit)) {
+        bootstrap_heap_current = bootstrap_heap_start;
+        return;
+    }
+    bootstrap_heap_start = align_up(kernel_end_addr, 16);
+    bootstrap_heap_current = bootstrap_heap_start;
+    bootstrap_heap_limit = 0x90000;
+}
+
+void memory_enable_pmm_backend(void) {
+    if (memory_pmm_backend_enabled) {
+        return;
+    }
+    if (!heap_grow(1)) {
+        return;
+    }
+    memory_pmm_backend_enabled = 1;
+}
+
 void* kmalloc(size_t size) {
-    return kmalloc_aligned(size, 16);
+    if (size == 0) {
+        return 0;
+    }
+    size = align_up_size(size, MEMORY_DEFAULT_ALIGNMENT);
+    if (!memory_pmm_backend_enabled) {
+        return bootstrap_alloc_aligned(size, MEMORY_DEFAULT_ALIGNMENT);
+    }
+    heap_block_t* block = heap_find_free_block(size);
+    if (!block) {
+        if (!heap_grow(size)) {
+            return 0;
+        }
+        block = heap_find_free_block(size);
+        if (!block) {
+            return 0;
+        }
+    }
+    heap_split_block(block, size);
+    block->free = 0;
+    return (void*)((uint8_t*)block + sizeof(heap_block_t));
+}
+
+void* kmalloc_aligned(size_t size, size_t alignment) {
+    if (size == 0) {
+        return 0;
+    }
+    if (!memory_pmm_backend_enabled) {
+        return bootstrap_alloc_aligned(size, alignment);
+    }
+    if (alignment <= MEMORY_DEFAULT_ALIGNMENT) {
+        return kmalloc(size);
+    }
+    size_t extra = alignment + sizeof(void*);
+    uint8_t* raw = (uint8_t*)kmalloc(size + extra);
+    if (!raw) {
+        return 0;
+    }
+    uintptr_t base = (uintptr_t)(raw + sizeof(void*));
+    uintptr_t aligned = (base + alignment - 1) & ~(uintptr_t)(alignment - 1);
+
+    ((void**)aligned)[-1] = raw;
+    return (void*)aligned; 
 }
 
 void* kcalloc(size_t num, size_t size) {
@@ -97,27 +231,75 @@ void* kcalloc(size_t num, size_t size) {
     if (!ptr) {
         return (void*)0; // Allocation failed
     }
-    for (size_t i = 0; i < total_size; i++) {
-        ((uint8_t*)ptr)[i] = 0;
-    }
+    memset(ptr, 0, total_size);
     return ptr;
 }
 
 uint32_t memory_get_heap_start(void) {
-    return heap_start;
+    return bootstrap_heap_start;
 }
 
 uint32_t memory_get_heap_current(void) {
-    return heap_current;
+    return bootstrap_heap_current;
 }
 
 uint32_t memory_get_heap_limit(void) {
-    return heap_limit;
+    return bootstrap_heap_limit;
 }
 
 uint32_t memory_get_heap_remaining(void) {
-    if (heap_current >= heap_limit) {
+    if (bootstrap_heap_current >= bootstrap_heap_limit) {
         return 0;
     }
-    return heap_limit - heap_current;
+    return bootstrap_heap_limit - bootstrap_heap_current;
+}
+
+int memory_is_pmm_backend_enabled(void) {
+    return memory_pmm_backend_enabled;
+}
+
+uint32_t memory_get_heap_committed_bytes(void) {
+    if (!memory_pmm_backend_enabled || !heap_head) {
+        return 0;
+    }
+    uint32_t total = 0;
+    heap_block_t* current = heap_head;
+
+    while (current) {
+        total += (uint32_t)(sizeof(heap_block_t) + current -> size);
+        current = current->next;
+    }
+    return total;
+}
+
+uint32_t memory_get_heap_used_bytes(void) {
+    if (!memory_pmm_backend_enabled || !heap_head) {
+        return 0;
+    }
+    uint32_t total = 0;
+    heap_block_t* current = heap_head;
+
+    while (current) {
+        if (!current->free) {
+            total += (uint32_t)current->size;
+        }
+        current = current->next;
+    }
+    return total;
+}
+
+uint32_t memory_get_heap_free_bytes(void) {
+    if (!memory_pmm_backend_enabled || !heap_head) {
+        return 0;
+    }
+    uint32_t total = 0;
+    heap_block_t* current = heap_head;
+
+    while (current) {
+        if (current->free) {
+            total += (uint32_t)current->size;
+        }
+        current = current->next;
+    }
+    return total;
 }
