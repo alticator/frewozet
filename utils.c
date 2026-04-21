@@ -13,6 +13,36 @@ uint32_t parse_uint(const char** str, int* ok) {
     return value;
 }
 
+int parse_hex32(const char* str, uint32_t* out) {
+    if (!str || *str == '\0') {
+        return 0;
+    }
+    uint32_t value = 0;
+    size_t i = 0;
+    if (str[0] == '0' && (str[1] == 'x' || str[1] == 'X')) {
+        i = 2;
+    } else {
+        return 0;
+    }
+    if (str[i] == '\0') {
+        return 0;
+    }
+    for (; str[i] != '\0'; i++) {
+        char c = str[i];
+        uint32_t digit;
+        if (c >= '0' && c <= '9') {
+            digit = (uint32_t)(c - '0');
+        } else if (c >= 'a' && c <= 'f') {
+            digit = (uint32_t)(10 + (c - 'a'));
+        } else if (c >= 'A' && c < 'F') {
+            digit = (uint32_t)(10 + (c - 'A'));
+        }
+        value = (value << 4) | digit;
+    }
+    *out = value;
+    return 1;
+}
+
 int strings_equal(const char* a, const char* b) {
     size_t i = 0;
     while (a[i] != '\0' && b[i] != '\0') {

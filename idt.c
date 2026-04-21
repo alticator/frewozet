@@ -1,5 +1,6 @@
 #include "idt.h"
 #include "terminal.h"
+#include "timer.h"
 #include "pic.h"
 #include "keyboard.h"
 #include <stdint.h>
@@ -19,7 +20,6 @@ struct __attribute__((packed)) idt_ptr {
 
 static struct idt_entry idt[256];
 static struct idt_ptr idtp;
-static uint32_t timer_ticks = 0;
 
 extern void idt_load(uint32_t idt_ptr_addr);
 
@@ -141,10 +141,6 @@ void idt_init(void) {
     idt_load((uint32_t)&idtp);
 }
 
-uint32_t get_timer_ticks(void) {
-    return timer_ticks;
-}
-
 void interrupt_handler(struct interrupt_frame* frame) {
     uint32_t n = frame->interrupt_number;
 
@@ -169,7 +165,7 @@ void interrupt_handler(struct interrupt_frame* frame) {
     }
 
     if (n == 32) {
-        timer_ticks++;
+        timer_tick();
         pic_send_eoi(0);
         return;
     }
