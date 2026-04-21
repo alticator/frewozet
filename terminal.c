@@ -220,3 +220,18 @@ void terminal_write(const char* str) {
     }
     terminal_update_cursor();
 }
+
+size_t terminal_get_cursor_index(void) {
+    return cursor_row * VGA_WIDTH + cursor_col;
+}
+
+void terminal_set_cursor_index(size_t index) {
+    if (index >= VGA_WIDTH * VGA_HEIGHT) {
+        index = VGA_WIDTH * VGA_HEIGHT - 1;
+    }
+    
+    cursor_row = index / VGA_WIDTH;
+    cursor_col = index % VGA_WIDTH;
+
+    terminal_update_cursor();
+}

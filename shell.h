@@ -18,4 +18,10 @@ void shell_history_prev(void);
 void shell_history_next(void);
 void shell_history_print(void);
 
+void shell_move_left(void);
+void shell_move_right(void);
+void shell_move_home(void);
+void shell_move_end(void);
+void shell_delete_forward(void);
+
 #endif

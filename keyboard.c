@@ -30,11 +30,26 @@ void keyboard_handle(void) {
     if (scancode & 0x80) {
         return;
     }
-    if (scancode == 0x48) {
+    if (scancode == 0x48) { // Up
         shell_history_prev();
         return;
-    } else if (scancode == 0x50) {
+    } else if (scancode == 0x50) { // Down
         shell_history_next();
+        return;
+    } else if (scancode == 0x4B) { // Left
+        shell_move_left();
+        return;
+    } else if (scancode == 0x4D) { // Right
+        shell_move_right();
+        return;
+    } else if (scancode == 0x47) { // Home
+        shell_move_home();
+        return;
+    } else if (scancode == 0x4F) { // End
+        shell_move_end();
+        return;
+    } else if (scancode == 0x53) { // Delete
+        shell_delete_forward();
         return;
     }
     if (scancode < 128) {
