@@ -12,6 +12,5 @@ struct interrupt_frame {
 
 void idt_init(void);
 void interrupt_handler(struct interrupt_frame* frame);
-uint32_t get_timer_ticks(void);
 
 #endif

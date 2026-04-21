@@ -7,6 +7,7 @@
 #include "ports.h"
 #include "idt.h"
 #include "shell.h"
+#include "timer.h"
 #include "ram_mapper.h"
 #include "pmm.h"
 
@@ -206,6 +207,7 @@ static void cmd_pmminfo(int argc, char** argv);
 // static void cmd_freepage(int argc, char** argv);
 static void cmd_memcpy(int argc, char** argv);
 static void cmd_memset(int argc, char** argv);
+static void cmd_runtime(int argc, char** argv);
 static void cmd_strlen(int argc, char** argv);
 static void cmd_strcmp(int argc, char** argv);
 static void cmd_strncmp(int argc, char** argv);
@@ -230,6 +232,7 @@ static const struct shell_command shell_commands[] = {
     //{"freepage",   cmd_freepage,   "freepage <hexaddr>            - Free one 4 KiB physical page"},
     {"memcpy",     cmd_memcpy,     "memcpy                        - Test memcpy"},
     {"memset",     cmd_memset,     "memset                        - Test memset"},
+    {"runtime",    cmd_runtime,    "runtime                       - Show system runtime"},
     {"strlen",     cmd_strlen,     "strlen <string>               - String length"},
     {"strcmp",     cmd_strcmp,     "strcmp <a> <b>                - Compare strings"},
     {"strncmp",    cmd_strncmp,    "strncmp <a> <b> <n>           - Compare prefix"},
@@ -280,9 +283,12 @@ static void cmd_ticks(int argc, char** argv) {
     (void)argc;
     (void)argv;
 
-    uint32_t ticks = get_timer_ticks();
-    terminal_write("Timer ticks since boot: ");
+    uint32_t ticks = timer_get_ticks();
+    uint32_t frequency = timer_get_frequency();
     terminal_write_decimal(ticks);
+    terminal_write(" ticks @ ");
+    terminal_write_decimal(frequency);
+    terminal_write(" Hz");
     terminal_write("\n");
 }
 
@@ -566,6 +572,35 @@ static void cmd_memset(int argc, char** argv) {
     colorshell_write("Buffer after memset: ", "output");
     shell_dump_bytes(buffer, 16);
     terminal_write("\n");
+}
+
+static void cmd_runtime(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+
+    uint32_t ticks = timer_get_ticks();
+    uint32_t frequency = timer_get_frequency();
+
+    if (frequency == 0) {
+        colorshell_write("ERROR: Timer frequency not initialized.", "error");
+        return;
+    }
+    uint32_t total_seconds = ticks / frequency;
+    uint32_t hours = total_seconds / 3600;
+    uint32_t minutes = (total_seconds % 3600) / 60;
+    uint32_t seconds = total_seconds % 60;
+
+    colorshell_write("Frewozet System Runtime: ", "info");
+    if (hours > 0) {
+        terminal_write_decimal((int)hours);
+        terminal_write(" h ");
+    }
+    if (hours > 0 || minutes > 0) {
+        terminal_write_decimal((int)minutes);
+        terminal_write(" min ");
+    }
+    terminal_write_decimal((int)seconds);
+    terminal_write(" s \n");
 }
 
 static void cmd_strlen(int argc, char** argv) {
