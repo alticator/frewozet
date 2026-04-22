@@ -254,8 +254,6 @@ static void cmd_help(int argc, char** argv) {
     (void)argv;
 
     colorshell_write("Frewozet Shell Help:\n", "info");
-    colorshell_write("Frewozet Special Keyboard Layout:\n", "info");
-    colorshell_write("HERE:UK_LAYOUT '+':'=', '*':'.', '.':',', '\"':';', '^':'`'\n", "info");
     colorshell_write("Available commands:\n", "info");
 
     for (size_t i = 0; i < shell_command_count; i++) {
@@ -516,8 +514,8 @@ static void cmd_alloc(int argc, char** argv) {
         return;
     }
     terminal_write("Allocated ");
-    terminal_write_decimal((int)alloc_size);
-    terminal_write(" bytes at 0x");
+    terminal_write_bytesize((uint64_t)alloc_size);
+    terminal_write(" at 0x");
     terminal_write_hex32((uint32_t)ptr1);
     terminal_write("\n");
 }
