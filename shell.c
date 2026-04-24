@@ -2,6 +2,7 @@
 #include "shell_parser.h"
 #include "shell_commands.h"
 #include "string.h"
+#include "command_hashtable.h"
 
 #define SHELL_BUFFER_SIZE 128
 #define SHELL_MAX_ARGS 16
@@ -266,6 +267,7 @@ void shell_init(void) {
     shell_saved_cursor_pos = 0;
     shell_saved_buffer[0] = '\0';
 
+    register_all_commands();
     terminal_write("\nWelcome to the Frewozet Shell!\nType 'help' for a list of commands.\n\n");
     shell_print_prompt();
 }
@@ -283,7 +285,7 @@ void shell_handle_char(char c) {
 
         char* argv[SHELL_MAX_ARGS];
         int argc = shell_tokenize(shell_buffer, argv, SHELL_MAX_ARGS);
-        shell_execute_command(argc, argv);
+        lookup_command(argv[0])(argc, argv);
 
         shell_buffer_length = 0;
         shell_buffer[0] = '\0';

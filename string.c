@@ -1,4 +1,5 @@
 #include "string.h"
+#include "memory.h"
 
 void* memcpy(void* dest, const void* src, size_t n) {
     uint8_t* d = (uint8_t*)dest;
@@ -67,6 +68,15 @@ char* strcpy(char* dst, const char* src) {
     }
     dst[i] = '\0';
     return dst;
+}
+
+char *strdup(const char *s) {
+    size_t len = strlen(s) + 1;
+    char *p = kmalloc(len);
+    if (!p) return NULL;
+
+    strcpy(p, s);
+    return p;
 }
 
 void str_append(char* dest, size_t *pos, const char* src) {

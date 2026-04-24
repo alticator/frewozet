@@ -1,6 +1,7 @@
 #include "shell_commands.h"
 #include "shell_parser.h"
 
+#include "command_hashtable.h"
 #include "terminal.h"
 #include "string.h"
 #include "memory.h"
@@ -189,6 +190,7 @@ static void shell_run_calc_argv(int argc, char** argv) {
 }
 
 static void cmd_help(int argc, char** argv);
+static void cmd_help_new(int argc, char ** argv);
 static void cmd_ticks(int argc, char** argv);
 static void cmd_clear(int argc, char** argv);
 static void cmd_echo(int argc, char** argv);
@@ -213,7 +215,7 @@ static void cmd_strcmp(int argc, char** argv);
 static void cmd_strncmp(int argc, char** argv);
 
 static const struct shell_command shell_commands[] = {
-    {"help",       cmd_help,       "help                          - Show help"},
+    {"help",       cmd_help_new,   "help                          - Show help"},
     {"clear",      cmd_clear,      "clear                         - Clear the terminal"},
     {"ticks",      cmd_ticks,      "ticks                         - Show timer ticks"},
     {"echo",       cmd_echo,       "echo <message>                - Print text"},
@@ -240,6 +242,7 @@ static const struct shell_command shell_commands[] = {
 
 static const size_t shell_command_count = sizeof(shell_commands) / sizeof(shell_commands[0]);
 
+
 static const struct shell_command* find_command(const char* name) {
     for (size_t i = 0; i < shell_command_count; i++) {
         if (strcmp(shell_commands[i].name, name) == 0) {
@@ -249,26 +252,45 @@ static const struct shell_command* find_command(const char* name) {
     return NULL;
 }
 
-static void cmd_help(int argc, char** argv) {
-    (void)argc;
-    (void)argv;
-
-    colorshell_write("Frewozet Shell Help:\n", "info");
-    colorshell_write("Available commands:\n", "info");
-
-    for (size_t i = 0; i < shell_command_count; i++) {
-        terminal_write("  ");
-        colorshell_write(shell_commands[i].help, "command");
-        terminal_write("\n");
+void register_all_commands(){
+    for (size_t i = 0; i < shell_command_count; i++){
+        register_command(shell_commands[i].name, shell_commands[i].handler, shell_commands[i].help);
     }
+}
 
-    // terminal_write("Examples:\n");
-    // terminal_write("  strlen hello\n");
-    // terminal_write("  strlen \"hello world\"\n");
-    // terminal_write("  strcmp abc abd\n");
-    // terminal_write("  strncmp abc abd 2\n");
-    // terminal_write("  calc 12+34\n");
-    // terminal_write("  calc 12 + 34\n");
+static void cmd_help_new(int argc, char **argv){
+        if (argc == 1) {
+        Node **p = get_full_table();
+        Node **end = p + get_table_size();
+
+        while (p < end) {
+            Node *node = *p;
+            if (!node || !node->key) {
+                p++;
+                continue;
+            }
+            terminal_write(node->help_text);
+            terminal_write("\n");
+
+            while (node->next) {
+                node = node->next;
+                terminal_write(node->help_text);
+                terminal_write("\n");
+            }
+            p++;
+        }
+        return;
+    }
+    Node * command = lookup_command_node(argv[1]);
+    while(command){
+        if(!strcmp(command->key, argv[1])){
+            terminal_write(command->help_text);
+            terminal_write("\n");
+            return;
+        }
+        command = command->next;
+    }
+    terminal_write("Command not found\n");
 }
 
 static void cmd_clear(int argc, char** argv) {
