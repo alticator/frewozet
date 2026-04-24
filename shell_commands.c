@@ -269,13 +269,11 @@ static void cmd_help_new(int argc, char **argv){
                 p++;
                 continue;
             }
-            terminal_write(node->help_text);
-            terminal_write("\n");
+            terminal_write_line(node->help_text);
 
             while (node->next) {
                 node = node->next;
-                terminal_write(node->help_text);
-                terminal_write("\n");
+                terminal_write_line(node->help_text);
             }
             p++;
         }
@@ -284,8 +282,7 @@ static void cmd_help_new(int argc, char **argv){
     Node * command = lookup_command_node(argv[1]);
     while(command){
         if(!strcmp(command->key, argv[1])){
-            terminal_write(command->help_text);
-            terminal_write("\n");
+            terminal_write_line(command->help_text);
             return;
         }
         command = command->next;

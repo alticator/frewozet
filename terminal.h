@@ -10,6 +10,7 @@ void terminal_init(void);
 void terminal_clear(void);
 
 void terminal_write(const char* str);
+void terminal_write_line(const char *str);
 void terminal_writechar(char c);
 
 void terminal_write_uint(uint32_t value);

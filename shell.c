@@ -285,7 +285,12 @@ void shell_handle_char(char c) {
 
         char* argv[SHELL_MAX_ARGS];
         int argc = shell_tokenize(shell_buffer, argv, SHELL_MAX_ARGS);
-        lookup_command(argv[0])(argc, argv);
+        function command = lookup_command(argv[0]);
+        if (command) command(argc, argv);
+        else {
+            terminal_write(argv[0]);
+            terminal_write_line(": No such command found");
+        }
 
         shell_buffer_length = 0;
         shell_buffer[0] = '\0';
