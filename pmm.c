@@ -2,6 +2,8 @@
 
 #include "ram_mapper.h"
 #include "memory.h"
+#include "startup_error.h"
+#include "mmu.h"
 
 extern uint8_t _kernel_end;
 
@@ -65,6 +67,7 @@ static void pmm_mark_range_free(uint32_t start_addr, uint32_t end_addr) {
 
 void pmm_init(void) {
     if (!ram_mapper_available()) {
+        logStartupError("Could not map RAM. Physical Memory Manager was not started.");
         return;
     }
 
@@ -154,10 +157,10 @@ void pmm_init(void) {
     /* Reserve low memory, kernel, and bitmap storage */
     pmm_mark_range_used(0x00000000u, 0x00100000u);
 
-    uint32_t kernel_end = (uint32_t)&_kernel_end;
+    uint32_t kernel_end = VIRT_TO_PHYS((uint32_t)&_kernel_end);
     pmm_mark_range_used(0x00000000u, kernel_end);
 
-    uint32_t bitmap_start = (uint32_t)pmm_bitmap;
+    uint32_t bitmap_start = VIRT_TO_PHYS((uint32_t)pmm_bitmap);
     pmm_mark_range_used(bitmap_start, bitmap_start + bitmap_bytes);
 }
 
