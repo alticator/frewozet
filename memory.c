@@ -3,12 +3,15 @@
 #include "ram_mapper.h"
 #include "string.h"
 #include "pmm.h"
+#include "mmu.h"
 
 extern uint32_t _kernel_end;
 
 #define MEMORY_DEFAULT_ALIGNMENT 16
 #define MEMORY_HEAP_GROW_PAGES 4
 #define MEMORY_MIN_SPLIT 16
+
+#define EARLY_MAPPED_PHYS_LIMIT 0x00400000u
 
 typedef struct heap_block {
     size_t size;
@@ -82,6 +85,9 @@ void* bootstrap_alloc_aligned(size_t size, size_t alignment) {
     if (aligned < bootstrap_heap_current) {
         return (void*)0; // Overflow
     }
+    if (aligned + (uint32_t)size < aligned) {
+        return (void*)0;
+    }
     if (aligned + (uint32_t)size > bootstrap_heap_limit) {
         return (void*)0; // Not enough space
     }
@@ -145,7 +151,8 @@ static int heap_grow(size_t minimum_payload_size) {
     if (pages < MEMORY_HEAP_GROW_PAGES) {
         pages = MEMORY_HEAP_GROW_PAGES;
     }
-    void* region = pmm_alloc_contiguous(pages);
+    void* phys = pmm_alloc_contiguous(pages);
+    void* region = PHYS_TO_VIRT((uint32_t)phys);
     if (!region) {
         return 0;
     }
@@ -154,14 +161,32 @@ static int heap_grow(size_t minimum_payload_size) {
 }
 
 void memory_init(void) {
-    uint32_t kernel_end_addr = (uint32_t)&_kernel_end;
-    if (find_bootstrap_region(kernel_end_addr, &bootstrap_heap_start, &bootstrap_heap_limit)) {
+    uint32_t kernel_end_phys = VIRT_TO_PHYS((uint32_t)&_kernel_end);
+
+    uint32_t heap_start_phys = 0;
+    uint32_t heap_limit_phys = 0;
+
+    if (find_bootstrap_region(kernel_end_phys, &heap_start_phys, &heap_limit_phys)) {
+        if (heap_limit_phys > EARLY_MAPPED_PHYS_LIMIT) {
+            heap_limit_phys = EARLY_MAPPED_PHYS_LIMIT;
+        }
+
+        if (heap_start_phys >= heap_limit_phys) {
+            heap_start_phys = align_up(kernel_end_phys, 16);
+            heap_limit_phys = EARLY_MAPPED_PHYS_LIMIT;
+        }
+
+        bootstrap_heap_start = (uint32_t)PHYS_TO_VIRT(heap_start_phys);
         bootstrap_heap_current = bootstrap_heap_start;
+        bootstrap_heap_limit = (uint32_t)PHYS_TO_VIRT(heap_limit_phys);
         return;
     }
-    bootstrap_heap_start = align_up(kernel_end_addr, 16);
+
+    heap_start_phys = align_up(kernel_end_phys, 16);
+
+    bootstrap_heap_start = (uint32_t)PHYS_TO_VIRT(heap_start_phys);
     bootstrap_heap_current = bootstrap_heap_start;
-    bootstrap_heap_limit = 0xC0190000;
+    bootstrap_heap_limit = (uint32_t)PHYS_TO_VIRT(EARLY_MAPPED_PHYS_LIMIT);
 }
 
 void memory_enable_pmm_backend(void) {

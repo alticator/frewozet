@@ -41,6 +41,7 @@ loader2_start:
     mov word [gs:0], 0x0732
 
     call collect_e820
+    call enable_a20
 
     ; load kernel temporarily to 0x1000:0000 = physical 0x00010000
     mov ax, TEMP_KERNEL_SEG
@@ -183,6 +184,12 @@ collect_e820:
     pop di
     pop es
     popad
+    ret
+
+enable_a20:
+    in al, 0x92
+    or al, 00000010b
+    out 0x92, al
     ret
 
 boot_drive       db 0

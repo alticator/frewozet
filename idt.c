@@ -22,6 +22,7 @@ static struct idt_entry idt[256];
 static struct idt_ptr idtp;
 
 extern void idt_load(uint32_t idt_ptr_addr);
+extern void gdt_flush(uint32_t);
 
 extern void isr0(void);  extern void isr1(void);  extern void isr2(void);  extern void isr3(void);
 extern void isr4(void);  extern void isr5(void);  extern void isr6(void);  extern void isr7(void);

@@ -24,11 +24,16 @@ SECTIONS
         *(.data*)
     }
 
+    _bss_start = ADDR(.bss);
+
     .bss : AT(ADDR(.bss) - KERNEL_VIRT_BASE)
     {
         *(COMMON)
         *(.bss*)
     }
+
+    _bss_end = .;
+    _kernel_end = .;
 
     _kernel_start = ADDR(.text);
     _kernel_end = .;

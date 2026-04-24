@@ -1,9 +1,11 @@
 #include "ram_mapper.h"
 
+#include "mmu.h"
+
 #include <stddef.h>
 
 const struct e820_info* ram_mapper_get_info(void) {
-    return (const struct e820_info*)(uintptr_t)E820_INFO_ADDR;
+    return (const struct e820_info*)PHYS_TO_VIRT(E820_INFO_ADDR);
 }
 
 int ram_mapper_available(void) {

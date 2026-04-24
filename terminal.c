@@ -1,8 +1,9 @@
 #include "terminal.h"
+#include "mmu.h"
 
 #define VGA_WIDTH 80
 #define VGA_HEIGHT 25
-#define VGA_MEMORY ((volatile uint16_t*)0xB8000)
+#define VGA_MEMORY ((volatile uint16_t*)PHYS_TO_VIRT(0x000B8000))
 
 static size_t cursor_row;
 static size_t cursor_col;

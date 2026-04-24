@@ -3,6 +3,12 @@ LOADER2_SRC     = loader2.asm
 ENTRY_SRC       = entry.asm
 LINKER_SRC      = linker.ld
 
+ISR_IRQ_SRC     = isr_irq.asm
+ISR_IRQ_OBJ     = isr_irq.o
+
+GDT_FLUSH_SRC = gdt_flush.asm
+GDT_FLUSH_OBJ = gdt_flush.o
+
 C_SOURCES       = $(wildcard *.c)
 
 BOOT_BIN        = boot.bin
@@ -30,14 +36,20 @@ LDFLAGS = -m elf_i386 -T $(LINKER_SRC) -nostdlib
 
 all: $(OS_IMG)
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
-
 $(ENTRY_OBJ): $(ENTRY_SRC)
 	$(NASM) -f elf32 $(ENTRY_SRC) -o $(ENTRY_OBJ)
 
-$(KERNEL_ELF): $(ENTRY_OBJ) $(KERNEL_OBJS) $(LINKER_SRC)
-	$(LD) $(LDFLAGS) -o $(KERNEL_ELF) $(ENTRY_OBJ) $(KERNEL_OBJS)
+$(ISR_IRQ_OBJ): $(ISR_IRQ_SRC)
+	$(NASM) -f elf32 $(ISR_IRQ_SRC) -o $(ISR_IRQ_OBJ)
+
+$(GDT_FLUSH_OBJ): $(GDT_FLUSH_SRC)
+	$(NASM) -f elf32 $(GDT_FLUSH_SRC) -o $(GDT_FLUSH_OBJ)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(KERNEL_ELF): $(ENTRY_OBJ) $(ISR_IRQ_OBJ) $(GDT_FLUSH_OBJ) $(KERNEL_OBJS) $(LINKER_SRC)
+	$(LD) $(LDFLAGS) -o $(KERNEL_ELF) $(ENTRY_OBJ) $(ISR_IRQ_OBJ) $(GDT_FLUSH_OBJ) $(KERNEL_OBJS)
 
 $(KERNEL_BIN): $(KERNEL_ELF)
 	$(OBJCOPY) -O binary $(KERNEL_ELF) $(KERNEL_BIN)
@@ -69,4 +81,4 @@ run: $(OS_IMG)
 	qemu-system-i386 -fda $(OS_IMG) -boot a
 
 clean:
-	rm -f $(BOOT_BIN) $(LOADER2_BIN) $(ENTRY_OBJ) $(KERNEL_OBJS) $(KERNEL_ELF) $(KERNEL_BIN) $(KERNEL_SECTORS_INC) $(OS_IMG)
+	rm -f $(BOOT_BIN) $(LOADER2_BIN) $(ENTRY_OBJ) $(ISR_IRQ_OBJ) $(GDT_FLUSH_OBJ) $(KERNEL_OBJS) $(KERNEL_ELF) $(KERNEL_BIN) $(KERNEL_SECTORS_INC) $(OS_IMG)
