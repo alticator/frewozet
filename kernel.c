@@ -5,6 +5,7 @@
 #include "memory.h"
 #include "pmm.h"
 #include "timer.h"
+#include "startup_error.h"
 
 void kmain(void) {
     volatile uint16_t* const vga = (volatile uint16_t*)0xB8000;
@@ -37,6 +38,14 @@ void kmain(void) {
     terminal_write("Enabling interrupts....");
     __asm__ __volatile__("sti");
     terminal_write("  OK\n\n");
+
+    char* startupErrors = getStartupErrors();
+    if (startupErrors) {
+        terminal_write("\nFREWOZET SYSTEM ERROR: The following errors occured during startup:\n");
+        terminal_write(startupErrors);
+        terminal_write("\n\nWARNING: Some features may not work properly due to the above errors.\n");
+    }
+
     terminal_write("Frewozet Kernel is ready. Starting Frewozet Shell....\n\n");
     shell_init();
 

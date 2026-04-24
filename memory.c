@@ -1,5 +1,5 @@
 #include "memory.h"
-#include "terminal.h"
+#include "startup_error.h"
 #include "ram_mapper.h"
 #include "string.h"
 #include "pmm.h"
@@ -161,7 +161,7 @@ void memory_init(void) {
     }
     bootstrap_heap_start = align_up(kernel_end_addr, 16);
     bootstrap_heap_current = bootstrap_heap_start;
-    bootstrap_heap_limit = 0x90000;
+    bootstrap_heap_limit = 0xC0190000;
 }
 
 void memory_enable_pmm_backend(void) {
@@ -169,6 +169,7 @@ void memory_enable_pmm_backend(void) {
         return;
     }
     if (!heap_grow(1)) {
+        logStartupError("Failed to enable PMM backed. Using unsafe bootstrap memory.");
         return;
     }
     memory_pmm_backend_enabled = 1;

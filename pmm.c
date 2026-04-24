@@ -2,6 +2,7 @@
 
 #include "ram_mapper.h"
 #include "memory.h"
+#include "startup_error.h"
 
 extern uint8_t _kernel_end;
 
@@ -65,6 +66,7 @@ static void pmm_mark_range_free(uint32_t start_addr, uint32_t end_addr) {
 
 void pmm_init(void) {
     if (!ram_mapper_available()) {
+        logStartupError("Could not map RAM. Physical Memory Manager was not started.");
         return;
     }
 

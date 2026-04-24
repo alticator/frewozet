@@ -10,6 +10,10 @@ KERNEL_VIRT_ENTRY    equ 0xC0100000
 SECTORS_PER_TRACK    equ 18
 HEADS_PER_CYLINDER   equ 2
 
+E820_INFO_ADDR    equ 0x0500
+E820_MAX_ENTRIES  equ 32
+E820_SIG          equ 0x324F3845
+
 PAGE_DIR_PHYS        equ 0x00009000
 PAGE_TABLE0_PHYS     equ 0x0000A000
 
@@ -129,6 +133,53 @@ gdt_end:
 gdt_descriptor:
     dw gdt_end - gdt_start - 1
     dd gdt_start
+
+collect_e820:
+    pushad
+    push es
+    push di
+
+    xor ax, ax
+    mov es, ax
+
+    mov di, E820_INFO_ADDR
+    mov dword [es:di], E820_SIG
+    mov word  [es:di+4], 0
+    mov word  [es:di+6], 0
+
+    mov di, E820_INFO_ADDR + 8
+    xor ebx, ebx
+
+.e820_loop:
+    mov eax, 0xE820
+    mov edx, 0x534D4150
+    mov ecx, 24
+    mov dword [es:di+20], 1
+    int 0x15
+    jc .done
+
+    cmp eax, 0x534D4150
+    jne .done
+
+    mov eax, [es:di+8]
+    or  eax, [es:di+12]
+    jz .skip_store
+
+    inc word [es:E820_INFO_ADDR + 4]
+    add di, 24
+
+    cmp word [es:E820_INFO_ADDR + 4], E820_MAX_ENTRIES
+    jae .done
+
+.skip_store:
+    test ebx, ebx
+    jne .e820_loop
+
+.done:
+    pop di
+    pop es
+    popad
+    ret
 
 bits 32
 protected_mode:
