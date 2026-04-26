@@ -77,6 +77,7 @@ char *strdup(const char *s) {
 
     strcpy(p, s);
     return p;
+}
   
 char* strcat(char* dst, const char* src) {
     size_t dst_len = strlen(dst);

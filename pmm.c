@@ -1,5 +1,4 @@
 #include "pmm.h"
-
 #include "ram_mapper.h"
 #include "memory.h"
 #include "startup_error.h"
@@ -10,7 +9,6 @@ extern uint8_t _kernel_end;
 static uint32_t* pmm_bitmap = 0;
 static uint32_t pmm_total_pages = 0;
 static uint32_t pmm_total_usable_pages = 0;
-static uint32_t pmm_used_pages = 0;
 static uint64_t pmm_total_usable_bytes = 0;
 
 static uint32_t align_up_u32(uint32_t addr, uint32_t alignment) {
@@ -43,14 +41,13 @@ static void pmm_mark_range_used(uint32_t start_addr, uint32_t end_addr) {
         uint32_t page = addr / PMM_PAGE_SIZE;
         if (page < pmm_total_pages && !pmm_test_bit(page)) {
             pmm_set_bit(page);
-            pmm_used_pages++;
         }
     }
 }
 
 static void pmm_mark_range_free(uint32_t start_addr, uint32_t end_addr) {
     uint32_t start = align_up_u32(start_addr, PMM_PAGE_SIZE);
-    uint32_t end   = align_down_u32(end_addr, PMM_PAGE_SIZE);
+    uint32_t end = align_down_u32(end_addr, PMM_PAGE_SIZE);
 
     if (end <= start) {
         return;
@@ -60,7 +57,6 @@ static void pmm_mark_range_free(uint32_t start_addr, uint32_t end_addr) {
         uint32_t page = addr / PMM_PAGE_SIZE;
         if (page < pmm_total_pages && pmm_test_bit(page)) {
             pmm_clear_bit(page);
-            pmm_used_pages--;
         }
     }
 }
@@ -77,28 +73,24 @@ void pmm_init(void) {
     pmm_total_usable_bytes = 0;
     pmm_total_usable_pages = 0;
 
-    /* First loop through E820 entries:
-       - find the highest tracked physical address
-       - sum usable bytes
-       - count usable pages */
     for (uint16_t i = 0; i < info->count; i++) {
         const struct e820_entry* entry = &info->entries[i];
+        uint64_t region_end = entry->base + entry->length;
 
-        uint64_t region_end_64 = entry->base + entry->length;
-        if (region_end_64 > highest_addr) {
-            highest_addr = region_end_64;
+        if (region_end > highest_addr) {
+            highest_addr = region_end;
         }
 
         if (entry->type == 1) {
             pmm_total_usable_bytes += entry->length;
 
             if (entry->base < 0x100000000ull) {
-                if (region_end_64 > 0x100000000ull) {
-                    region_end_64 = 0x100000000ull;
+                if (region_end > 0x100000000ull) {
+                    region_end = 0x100000000ull;
                 }
 
                 uint32_t usable_start = align_up_u32((uint32_t)entry->base, PMM_PAGE_SIZE);
-                uint32_t usable_end   = align_down_u32((uint32_t)region_end_64, PMM_PAGE_SIZE);
+                uint32_t usable_end = align_down_u32((uint32_t)region_end, PMM_PAGE_SIZE);
 
                 if (usable_end > usable_start) {
                     pmm_total_usable_pages += (usable_end - usable_start) / PMM_PAGE_SIZE;
@@ -121,53 +113,43 @@ void pmm_init(void) {
 
     pmm_bitmap = (uint32_t*)kmalloc_aligned(bitmap_bytes, PMM_PAGE_SIZE);
     if (!pmm_bitmap) {
+        logStartupError("PMM bitmap allocation failed.");
         return;
     }
 
-    /* Start with every tracked page marked used */
     for (uint32_t i = 0; i < bitmap_words; i++) {
         pmm_bitmap[i] = 0xFFFFFFFFu;
     }
-    pmm_used_pages = pmm_total_pages;
 
-    /* Second loop:
-        - only free usable RAM pages */
     for (uint16_t i = 0; i < info->count; i++) {
         const struct e820_entry* entry = &info->entries[i];
 
-        if (entry->type != 1) {
+        if (entry->type != 1 || entry->base >= 0x100000000ull) {
             continue;
         }
 
-        if (entry->base >= 0x100000000ull) {
-            continue;
+        uint64_t region_end = entry->base + entry->length;
+        if (region_end > 0x100000000ull) {
+            region_end = 0x100000000ull;
         }
 
-        uint64_t region_end_64 = entry->base + entry->length;
-        if (region_end_64 > 0x100000000ull) {
-            region_end_64 = 0x100000000ull;
-        }
-
-        uint32_t start = (uint32_t)entry->base;
-        uint32_t end   = (uint32_t)region_end_64;
-
-        pmm_mark_range_free(start, end);
+        pmm_mark_range_free((uint32_t)entry->base, (uint32_t)region_end);
     }
 
-    /* Reserve low memory, kernel, and bitmap storage */
     pmm_mark_range_used(0x00000000u, 0x00100000u);
 
-    uint32_t kernel_end = VIRT_TO_PHYS((uint32_t)&_kernel_end);
-    pmm_mark_range_used(0x00000000u, kernel_end);
+    uint32_t kernel_end_phys = VIRT_TO_PHYS((uint32_t)&_kernel_end);
+    pmm_mark_range_used(0x00000000u, kernel_end_phys);
 
-    uint32_t bitmap_start = VIRT_TO_PHYS((uint32_t)pmm_bitmap);
-    pmm_mark_range_used(bitmap_start, bitmap_start + bitmap_bytes);
+    uint32_t bitmap_start_phys = VIRT_TO_PHYS((uint32_t)pmm_bitmap);
+    pmm_mark_range_used(bitmap_start_phys, bitmap_start_phys + bitmap_bytes);
 }
 
 void* pmm_alloc_contiguous(uint32_t page_count) {
     if (!pmm_bitmap || page_count == 0) {
         return 0;
     }
+
     uint32_t run_start = 0;
     uint32_t run_len = 0;
 
@@ -176,50 +158,80 @@ void* pmm_alloc_contiguous(uint32_t page_count) {
             if (run_len == 0) {
                 run_start = page;
             }
+
             run_len++;
+
             if (run_len == page_count) {
                 for (uint32_t i = 0; i < page_count; i++) {
                     pmm_set_bit(run_start + i);
                 }
-                return (void*)((run_start) * PMM_PAGE_SIZE);
+
+                return (void*)(run_start * PMM_PAGE_SIZE);
             }
         } else {
             run_len = 0;
         }
     }
+
     return 0;
 }
 
-void pmm_free_contiguous(void* start_page, uint32_t page_count) {
-    if (!pmm_bitmap || page_count == 0) {
-        return;
+void* pmm_alloc_page_below(uint32_t limit) {
+    if (!pmm_bitmap) {
+        return 0;
     }
-    uint32_t start_addr = (uint32_t)start_page;
-    if (start_addr % PMM_PAGE_SIZE != 0) {
-        // Invalid page address
-        return;
+
+    uint32_t max_page = limit / PMM_PAGE_SIZE;
+    if (max_page > pmm_total_pages) {
+        max_page = pmm_total_pages;
     }
-    uint32_t start_index = start_addr / PMM_PAGE_SIZE;
-    if (start_addr >= pmm_total_pages) {
-        return;
-    }
-    for (uint32_t i = 0; i < page_count; i++) {
-        uint32_t page = start_index + i;
-        if (page >= pmm_total_pages) {
-            break;
-        }
-        if (pmm_test_bit(page)) {
-            pmm_clear_bit(page);
+
+    for (uint32_t page = 0; page < max_page; page++) {
+        if (!pmm_test_bit(page)) {
+            pmm_set_bit(page);
+            return (void*)(page * PMM_PAGE_SIZE);
         }
     }
+
+    return 0;
 }
 
 void* pmm_alloc_page(void) {
     return pmm_alloc_contiguous(1);
 }
 
+void pmm_free_contiguous(void* start_page, uint32_t page_count) {
+    if (!pmm_bitmap || !start_page || page_count == 0) {
+        return;
+    }
+
+    uint32_t start_addr = (uint32_t)start_page;
+
+    if (start_addr % PMM_PAGE_SIZE != 0) {
+        return;
+    }
+
+    uint32_t start_index = start_addr / PMM_PAGE_SIZE;
+
+    if (start_index >= pmm_total_pages) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < page_count; i++) {
+        uint32_t page = start_index + i;
+
+        if (page >= pmm_total_pages) {
+            break;
+        }
+
+        if (pmm_test_bit(page)) {
+            pmm_clear_bit(page);
+        }
+    }
+}
+
 void pmm_free_page(void* page_ptr) {
-    return pmm_free_contiguous(page_ptr, 1);
+    pmm_free_contiguous(page_ptr, 1);
 }
 
 uint32_t pmm_get_total_pages(void) {
@@ -231,10 +243,12 @@ uint32_t pmm_get_total_usable_pages(void) {
 }
 
 uint32_t pmm_get_free_pages(void) {
-    uint32_t free_pages = 0;
     if (!pmm_bitmap) {
         return 0;
     }
+
+    uint32_t free_pages = 0;
+
     for (uint32_t page = 0; page < pmm_total_pages; page++) {
         if (!pmm_test_bit(page)) {
             free_pages++;
@@ -246,14 +260,16 @@ uint32_t pmm_get_free_pages(void) {
 
 uint32_t pmm_get_used_pages(void) {
     uint32_t free_pages = pmm_get_free_pages();
+
     if (pmm_total_usable_pages >= free_pages) {
         return pmm_total_usable_pages - free_pages;
     }
+
     return 0;
 }
 
 uint64_t pmm_get_total_bytes(void) {
-    return (uint64_t)pmm_get_total_pages() * PMM_PAGE_SIZE;
+    return (uint64_t)pmm_total_pages * PMM_PAGE_SIZE;
 }
 
 uint64_t pmm_get_total_usable_bytes(void) {
