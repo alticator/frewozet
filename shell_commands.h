@@ -2,5 +2,6 @@
 #define SHELL_COMMANDS_H
 
 void shell_execute_command(int argc, char** argv);
+void register_all_commands();
 
 #endif

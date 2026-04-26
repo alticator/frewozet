@@ -1,6 +1,7 @@
 #include "shell_commands.h"
 #include "shell_parser.h"
 
+#include "command_hashtable.h"
 #include "terminal.h"
 #include "string.h"
 #include "memory.h"
@@ -10,6 +11,8 @@
 #include "timer.h"
 #include "ram_mapper.h"
 #include "pmm.h"
+#include "paging.h"
+
 
 #include <stddef.h>
 #include <stdint.h>
@@ -189,6 +192,7 @@ static void shell_run_calc_argv(int argc, char** argv) {
 }
 
 static void cmd_help(int argc, char** argv);
+static void cmd_help_new(int argc, char ** argv);
 static void cmd_ticks(int argc, char** argv);
 static void cmd_clear(int argc, char** argv);
 static void cmd_echo(int argc, char** argv);
@@ -211,9 +215,11 @@ static void cmd_runtime(int argc, char** argv);
 static void cmd_strlen(int argc, char** argv);
 static void cmd_strcmp(int argc, char** argv);
 static void cmd_strncmp(int argc, char** argv);
+static void cmd_pageinfo(int arcg, char** argv);
+static void cmd_maptest(int argc, char** argv);
 
 static const struct shell_command shell_commands[] = {
-    {"help",       cmd_help,       "help                          - Show help"},
+    {"help",       cmd_help_new,   "help                          - Show help"},
     {"clear",      cmd_clear,      "clear                         - Clear the terminal"},
     {"ticks",      cmd_ticks,      "ticks                         - Show timer ticks"},
     {"echo",       cmd_echo,       "echo <message>                - Print text"},
@@ -236,9 +242,12 @@ static const struct shell_command shell_commands[] = {
     {"strlen",     cmd_strlen,     "strlen <string>               - String length"},
     {"strcmp",     cmd_strcmp,     "strcmp <a> <b>                - Compare strings"},
     {"strncmp",    cmd_strncmp,    "strncmp <a> <b> <n>           - Compare prefix"},
+    {"pageinfo",   cmd_pageinfo,   "pageinfo <virtaddr>            - Show physical mapping"},
+    {"maptest",    cmd_maptest,    "maptest                        - Map and test one page"}
 };
 
 static const size_t shell_command_count = sizeof(shell_commands) / sizeof(shell_commands[0]);
+
 
 static const struct shell_command* find_command(const char* name) {
     for (size_t i = 0; i < shell_command_count; i++) {
@@ -249,26 +258,42 @@ static const struct shell_command* find_command(const char* name) {
     return NULL;
 }
 
-static void cmd_help(int argc, char** argv) {
-    (void)argc;
-    (void)argv;
-
-    colorshell_write("Frewozet Shell Help:\n", "info");
-    colorshell_write("Available commands:\n", "info");
-
-    for (size_t i = 0; i < shell_command_count; i++) {
-        terminal_write("  ");
-        colorshell_write(shell_commands[i].help, "command");
-        terminal_write("\n");
+void register_all_commands(){
+    for (size_t i = 0; i < shell_command_count; i++){
+        register_command(shell_commands[i].name, shell_commands[i].handler, shell_commands[i].help);
     }
+}
 
-    // terminal_write("Examples:\n");
-    // terminal_write("  strlen hello\n");
-    // terminal_write("  strlen \"hello world\"\n");
-    // terminal_write("  strcmp abc abd\n");
-    // terminal_write("  strncmp abc abd 2\n");
-    // terminal_write("  calc 12+34\n");
-    // terminal_write("  calc 12 + 34\n");
+static void cmd_help_new(int argc, char **argv){
+        if (argc == 1) {
+        Node **p = get_full_table();
+        Node **end = p + get_table_size();
+
+        while (p < end) {
+            Node *node = *p;
+            if (!node || !node->key) {
+                p++;
+                continue;
+            }
+            terminal_write_line(node->help_text);
+
+            while (node->next) {
+                node = node->next;
+                terminal_write_line(node->help_text);
+            }
+            p++;
+        }
+        return;
+    }
+    Node * command = lookup_command_node(argv[1]);
+    while(command){
+        if(!strcmp(command->key, argv[1])){
+            terminal_write_line(command->help_text);
+            return;
+        }
+        command = command->next;
+    }
+    terminal_write("Command not found\n");
 }
 
 static void cmd_clear(int argc, char** argv) {
@@ -642,6 +667,54 @@ static void cmd_strncmp(int argc, char** argv) {
     terminal_write("strncmp result: ");
     terminal_write_decimal(result);
     terminal_write("\n");
+}
+
+static void cmd_pageinfo(int argc, char** argv) {
+    if (argc < 2) {
+        colorshell_write("Usage: pageinfo <virtual address>\n", "error");
+        return;
+    }
+    uint32_t virt = 0;
+    if (!parse_hex32(argv[1], &virt)) {
+        colorshell_write("FREWOZET SHELL ERROR: Invalid hex address.", "error");
+        return;
+    }
+    uint32_t phys = paging_translate(virt);
+
+    colorshell_write("Virtual: ", "command");
+    terminal_write("0x");
+    terminal_write_hex32(virt);
+
+    colorshell_write("\nPhysical: ", "command");
+    terminal_write("0x");
+    terminal_write_hex32(phys);
+
+    terminal_write("\n");
+}
+
+static void cmd_maptest(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+
+    uint32_t test_virt = 0xC0400000u;
+
+    if (!paging_alloc_page(test_virt, PAGE_WRITABLE)) {
+        colorshell_write("Maptest failed. Could not allocate allocate page", "error");
+    }
+
+    volatile uint32_t* p = (volatile uint32_t*)test_virt;
+    *p = 0x1234ABCD;
+
+    terminal_write("Mapped test page at 0x");
+    terminal_write_hex32(test_virt);
+
+    terminal_write("\nValue written and read: 0x");
+    terminal_write_hex32(*p);
+
+    terminal_write("\nPhysical backing: 0x");
+    terminal_write_hex32(paging_translate(test_virt));
+    terminal_write("\n");
+
 }
 
 void shell_execute_command(int argc, char** argv) {

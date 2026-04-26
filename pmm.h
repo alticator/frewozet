@@ -10,6 +10,7 @@ void pmm_init(void);
 
 void* pmm_alloc_page(void);
 void pmm_free_page(void* page_ptr);
+void* pmm_alloc_page_below(uint32_t limit);
 
 void* pmm_alloc_contiguous(uint32_t page_count);
 void pmm_free_contiguous(void* start_page, uint32_t page_count);

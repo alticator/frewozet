@@ -1,8 +1,9 @@
 #include "terminal.h"
+#include "mmu.h"
 
 #define VGA_WIDTH 80
 #define VGA_HEIGHT 25
-#define VGA_MEMORY ((volatile uint16_t*)0xB8000)
+#define VGA_MEMORY ((volatile uint16_t*)PHYS_TO_VIRT(0x000B8000))
 
 static size_t cursor_row;
 static size_t cursor_col;
@@ -219,6 +220,11 @@ void terminal_write(const char* str) {
         terminal_writechar_optimized(str[i]);
     }
     terminal_update_cursor();
+}
+
+void terminal_write_line(const char *str){
+    terminal_write(str);
+    terminal_write("\n");
 }
 
 size_t terminal_get_cursor_index(void) {
