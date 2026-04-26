@@ -222,6 +222,11 @@ void terminal_write(const char* str) {
     terminal_update_cursor();
 }
 
+void terminal_write_line(const char *str){
+    terminal_write(str);
+    terminal_write("\n");
+}
+
 size_t terminal_get_cursor_index(void) {
     return cursor_row * VGA_WIDTH + cursor_col;
 }

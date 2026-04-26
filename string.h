@@ -12,6 +12,7 @@ int strncmp(const char* a, const char* b, size_t n);
 int strequal(const char* a, const char* b);
 int strnequal(const char* a, const char* b, size_t n);
 char* strcpy(char* destination, const char* source);
+char *strdup(const char *s);
 char* strcat(char* destination, const char* source);
 void str_append(char* dest, size_t *pos, const char* src);
 void str_appendchar(char* dest, size_t *pos, char c);
