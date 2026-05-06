@@ -5,10 +5,8 @@
 #include "string.h"
 #include <stdint.h>
 
-#define PAGE_DIR_PHYS  0x00009000
-
 static uint32_t* paging_get_page_directory(void) {
-    return (uint32_t*)PHYS_TO_VIRT(PAGE_DIR_PHYS);
+    return (uint32_t*)0xFFFFF000;
 }
 
 static inline uint32_t paging_dir_index(uint32_t virt_addr) {
@@ -33,8 +31,7 @@ static uint32_t* paging_get_page_table(uint32_t virt_addr, int create, uint32_t 
     uint32_t pde = page_directory[pd_index];
 
     if (pde & PAGE_PRESENT) {
-        uint32_t table_phys = pde & 0xFFFFF000u;
-        return (uint32_t*)PHYS_TO_VIRT(table_phys);
+        return (uint32_t*)(0xFFC00000 + (pd_index << 12));
     }
 
     if (!create) {
@@ -47,7 +44,7 @@ static uint32_t* paging_get_page_table(uint32_t virt_addr, int create, uint32_t 
     }
 
     uint32_t new_table_phys = (uint32_t)new_table_phys_ptr;
-    uint32_t* new_table_virt = (uint32_t*)PHYS_TO_VIRT(new_table_phys);
+    uint32_t* new_table_virt = (uint32_t*)(0xFFC00000 + (pd_index << 12));
 
     memset(new_table_virt, 0, PAGE_SIZE);
 

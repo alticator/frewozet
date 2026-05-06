@@ -4,6 +4,10 @@
 #include "startup_error.h"
 #include "mmu.h"
 
+#define PAGE_DIR_PHYS  0x00009000
+#define PAGE_TABLE0_PHYS 0x0000A000
+#define KERNEL_PHYS_ADDR 0x00100000
+
 extern uint8_t _kernel_end;
 
 static uint32_t* pmm_bitmap = 0;
@@ -143,6 +147,10 @@ void pmm_init(void) {
 
     uint32_t bitmap_start_phys = VIRT_TO_PHYS((uint32_t)pmm_bitmap);
     pmm_mark_range_used(bitmap_start_phys, bitmap_start_phys + bitmap_bytes);
+
+    // Mark paging structures
+    pmm_mark_range_used(PAGE_DIR_PHYS, PAGE_DIR_PHYS + PMM_PAGE_SIZE);
+    pmm_mark_range_used(PAGE_TABLE0_PHYS, PAGE_TABLE0_PHYS + 16 * PMM_PAGE_SIZE);
 }
 
 void* pmm_alloc_contiguous(uint32_t page_count) {

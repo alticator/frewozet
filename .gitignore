@@ -3,3 +3,7 @@
 *.bin
 *.elf
 *.img
+/.idea
+/.vscode
+*.log
+*.txt

@@ -78,7 +78,7 @@ $(OS_IMG): $(BOOT_BIN) $(LOADER2_BIN) $(KERNEL_BIN)
 	$(DD) if=$(KERNEL_BIN) of=$(OS_IMG) bs=$(SECTOR_SIZE) seek=9 conv=notrunc
 
 run: $(OS_IMG)
-	qemu-system-i386 -fda $(OS_IMG) -boot a
+	qemu-system-i386 -hda $(OS_IMG) -boot c
 
 clean:
 	rm -f $(BOOT_BIN) $(LOADER2_BIN) $(ENTRY_OBJ) $(ISR_IRQ_OBJ) $(GDT_FLUSH_OBJ) $(KERNEL_OBJS) $(KERNEL_ELF) $(KERNEL_BIN) $(KERNEL_SECTORS_INC) $(OS_IMG)
