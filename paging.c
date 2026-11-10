@@ -5,6 +5,10 @@
 #include "string.h"
 #include <stdint.h>
 
+#define BOOT_MAPPED_PAGE_TABLES 16
+#define KERNEL_HIGH_PD_START 768
+#define RECURSIVE_PD_INDEX 1023
+
 static uint32_t* paging_get_page_directory(void) {
     return (uint32_t*)0xFFFFF000;
 }
@@ -21,8 +25,34 @@ static inline uint32_t paging_align_down(uint32_t addr) {
     return addr & 0xFFFFF000u;
 }
 
+static uint32_t* paging_get_page_table_virtual(uint32_t pd_index) {
+    return (uint32_t*)(0xFFC00000u + (pd_index << 12));
+}
+
 static void paging_invalidate_page(uint32_t virt_addr) {
     __asm__ __volatile__("invlpg (%0)" : : "r"((void*)virt_addr) : "memory");
+}
+
+static int paging_page_table_is_boot_owned(uint32_t pd_index) {
+    if (pd_index < BOOT_MAPPED_PAGE_TABLES) {
+        return 1;
+    }
+
+    if (pd_index >= KERNEL_HIGH_PD_START && pd_index < KERNEL_HIGH_PD_START + BOOT_MAPPED_PAGE_TABLES) {
+        return 1;
+    }
+
+    return pd_index == RECURSIVE_PD_INDEX;
+}
+
+static int paging_page_table_is_empty(uint32_t* page_table) {
+    for (uint32_t i = 0; i < PAGE_ENTRIES; i++) {
+        if (page_table[i] & PAGE_PRESENT) {
+            return 0;
+        }
+    }
+
+    return 1;
 }
 
 static uint32_t* paging_get_page_table(uint32_t virt_addr, int create, uint32_t table_flags) {
@@ -31,7 +61,7 @@ static uint32_t* paging_get_page_table(uint32_t virt_addr, int create, uint32_t 
     uint32_t pde = page_directory[pd_index];
 
     if (pde & PAGE_PRESENT) {
-        return (uint32_t*)(0xFFC00000 + (pd_index << 12));
+        return paging_get_page_table_virtual(pd_index);
     }
 
     if (!create) {
@@ -44,19 +74,22 @@ static uint32_t* paging_get_page_table(uint32_t virt_addr, int create, uint32_t 
     }
 
     uint32_t new_table_phys = (uint32_t)new_table_phys_ptr;
-    uint32_t* new_table_virt = (uint32_t*)(0xFFC00000 + (pd_index << 12));
-
-    memset(new_table_virt, 0, PAGE_SIZE);
+    uint32_t* new_table_virt = paging_get_page_table_virtual(pd_index);
 
     page_directory[pd_index] = (new_table_phys & 0xFFFFF000u) | (table_flags & 0xFFFu) | PAGE_PRESENT;
-    paging_invalidate_page((uint32_t)&page_directory[pd_index]);
+    paging_invalidate_page((uint32_t)new_table_virt);
+
+    memset(new_table_virt, 0, PAGE_SIZE);
 
     return new_table_virt;
 }
 
 void paging_remove_identity_map(void) {
     uint32_t* page_directory = paging_get_page_directory();
-    page_directory[0] = 0;
+
+    for (uint32_t i = 0; i < BOOT_MAPPED_PAGE_TABLES; i++) {
+        page_directory[i] = 0;
+    }
 
     uint32_t cr3;
     __asm__ __volatile__("mov %%cr3, %0" : "=r"(cr3));
@@ -83,6 +116,10 @@ int paging_map_page(uint32_t virt_addr, uint32_t phys_addr, uint32_t flags) {
     }
 
     uint32_t pt_index = paging_table_index(virt_addr);
+    if (page_table[pt_index] & PAGE_PRESENT) {
+        return 0;
+    }
+
     page_table[pt_index] = phys_addr | (flags & 0xFFFu) | PAGE_PRESENT;
 
     paging_invalidate_page(virt_addr);
@@ -98,9 +135,18 @@ void paging_unmap_page(uint32_t virt_addr) {
     }
 
     uint32_t pt_index = paging_table_index(virt_addr);
+    uint32_t pde = paging_get_page_directory()[paging_dir_index(virt_addr)];
     page_table[pt_index] = 0;
 
     paging_invalidate_page(virt_addr);
+
+    uint32_t pd_index = paging_dir_index(virt_addr);
+    if (!paging_page_table_is_boot_owned(pd_index) && paging_page_table_is_empty(page_table)) {
+        uint32_t* page_directory = paging_get_page_directory();
+        page_directory[pd_index] = 0;
+        paging_invalidate_page((uint32_t)page_table);
+        pmm_free_page((void*)(pde & 0xFFFFF000u));
+    }
 }
 
 uint32_t paging_translate(uint32_t virt_addr) {
@@ -112,8 +158,7 @@ uint32_t paging_translate(uint32_t virt_addr) {
         return 0;
     }
 
-    uint32_t table_phys = pde & 0xFFFFF000u;
-    uint32_t* page_table = (uint32_t*)PHYS_TO_VIRT(table_phys);
+    uint32_t* page_table = paging_get_page_table_virtual(pd_index);
 
     uint32_t pt_index = paging_table_index(virt_addr);
     uint32_t pte = page_table[pt_index];

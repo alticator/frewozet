@@ -14,7 +14,7 @@ extern uint32_t _kernel_end;
 
 #define EARLY_MAPPED_PHYS_LIMIT 0x04000000u
 
-#define KERNEL_HEAP_START 0xC1000000u
+#define KERNEL_HEAP_START 0xC4000000u
 #define KERNEL_HEAP_END   0xE0000000u
 
 typedef struct heap_block {
@@ -42,9 +42,27 @@ static uint32_t align_up_u32(uint32_t value, uint32_t alignment) {
     return (value + mask) & ~mask;
 }
 
-static size_t align_up_size(size_t value, size_t alignment) {
+static int is_power_of_two_size(size_t value) {
+    return value != 0 && (value & (value - 1)) == 0;
+}
+
+static int align_up_size_checked(size_t value, size_t alignment, size_t* out) {
+    if (alignment == 0) {
+        *out = value;
+        return 1;
+    }
+
+    if (!is_power_of_two_size(alignment)) {
+        return 0;
+    }
+
     size_t mask = alignment - 1;
-    return (value + mask) & ~mask;
+    if (value > ((size_t)-1) - mask) {
+        return 0;
+    }
+
+    *out = (value + mask) & ~mask;
+    return 1;
 }
 
 static int find_bootstrap_region(uint32_t kernel_end_phys, uint32_t* out_start, uint32_t* out_limit) {
@@ -90,6 +108,10 @@ void* bootstrap_alloc_aligned(size_t size, size_t alignment) {
 
     if (alignment == 0) {
         alignment = MEMORY_DEFAULT_ALIGNMENT;
+    }
+
+    if (!is_power_of_two_size(alignment)) {
+        return 0;
     }
 
     uint32_t aligned = align_up_u32(bootstrap_heap_current, (uint32_t)alignment);
@@ -153,7 +175,10 @@ static void heap_split_block(heap_block_t* block, size_t size) {
         return;
     }
 
-    size_t aligned_size = align_up_size(size, MEMORY_DEFAULT_ALIGNMENT);
+    size_t aligned_size;
+    if (!align_up_size_checked(size, MEMORY_DEFAULT_ALIGNMENT, &aligned_size)) {
+        return;
+    }
 
     if (block->size <= aligned_size + sizeof(heap_block_t) + MEMORY_MIN_SPLIT) {
         return;
@@ -170,28 +195,54 @@ static void heap_split_block(heap_block_t* block, size_t size) {
     block->next = new_block;
 }
 
-static uint32_t pages_needed_for(size_t bytes) {
-    return (uint32_t)((bytes + PMM_PAGE_SIZE - 1) / PMM_PAGE_SIZE);
+static int pages_needed_for(size_t bytes, uint32_t* out_pages) {
+    if (bytes > ((size_t)-1) - (PMM_PAGE_SIZE - 1)) {
+        return 0;
+    }
+
+    size_t pages = (bytes + PMM_PAGE_SIZE - 1) / PMM_PAGE_SIZE;
+    if (pages > 0xFFFFFFFFu) {
+        return 0;
+    }
+
+    *out_pages = (uint32_t)pages;
+    return 1;
+}
+
+static void heap_release_mapped_pages(uint32_t region_start, uint32_t page_count) {
+    for (uint32_t i = 0; i < page_count; i++) {
+        uint32_t virt = region_start + i * PMM_PAGE_SIZE;
+        uint32_t phys = paging_translate(virt);
+
+        if (phys) {
+            paging_unmap_page(virt);
+            pmm_free_page((void*)(phys & 0xFFFFF000u));
+        }
+    }
 }
 
 static int heap_grow(size_t minimum_payload_size) {
+    if (minimum_payload_size > ((size_t)-1) - sizeof(heap_block_t)) {
+        return 0;
+    }
+
     size_t bytes_needed = minimum_payload_size + sizeof(heap_block_t);
-    uint32_t pages = pages_needed_for(bytes_needed);
+    uint32_t pages;
+
+    if (!pages_needed_for(bytes_needed, &pages)) {
+        return 0;
+    }
 
     if (pages < MEMORY_HEAP_GROW_PAGES) {
         pages = MEMORY_HEAP_GROW_PAGES;
     }
 
+    uint32_t max_pages = (KERNEL_HEAP_END - heap_virtual_current) / PMM_PAGE_SIZE;
+    if (pages > max_pages) {
+        return 0;
+    }
+
     uint32_t region_size = pages * PMM_PAGE_SIZE;
-
-    if (heap_virtual_current + region_size < heap_virtual_current) {
-        return 0;
-    }
-
-    if (heap_virtual_current + region_size > KERNEL_HEAP_END) {
-        return 0;
-    }
-
     uint32_t region_start = heap_virtual_current;
     uint32_t virt = region_start;
 
@@ -199,11 +250,13 @@ static int heap_grow(size_t minimum_payload_size) {
         void* phys_page = pmm_alloc_page();
 
         if (!phys_page) {
+            heap_release_mapped_pages(region_start, i);
             return 0;
         }
 
         if (!paging_map_page(virt, (uint32_t)phys_page, PAGE_WRITABLE)) {
             pmm_free_page(phys_page);
+            heap_release_mapped_pages(region_start, i);
             return 0;
         }
 
@@ -264,7 +317,9 @@ void* kmalloc(size_t size) {
         return 0;
     }
 
-    size = align_up_size(size, MEMORY_DEFAULT_ALIGNMENT);
+    if (!align_up_size_checked(size, MEMORY_DEFAULT_ALIGNMENT, &size)) {
+        return 0;
+    }
 
     if (!memory_pmm_backend_enabled) {
         return bootstrap_alloc_aligned(size, MEMORY_DEFAULT_ALIGNMENT);
@@ -294,6 +349,14 @@ void* kmalloc_aligned(size_t size, size_t alignment) {
         return 0;
     }
 
+    if (alignment == 0) {
+        alignment = MEMORY_DEFAULT_ALIGNMENT;
+    }
+
+    if (!is_power_of_two_size(alignment)) {
+        return 0;
+    }
+
     if (!memory_pmm_backend_enabled) {
         return bootstrap_alloc_aligned(size, alignment);
     }
@@ -302,7 +365,15 @@ void* kmalloc_aligned(size_t size, size_t alignment) {
         return kmalloc(size);
     }
 
+    if (alignment > ((size_t)-1) - sizeof(void*)) {
+        return 0;
+    }
+
     size_t extra = alignment + sizeof(void*);
+    if (size > ((size_t)-1) - extra) {
+        return 0;
+    }
+
     uint8_t* raw = (uint8_t*)kmalloc(size + extra);
 
     if (!raw) {

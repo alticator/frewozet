@@ -48,16 +48,6 @@ static int shell_parse_uint32(const char* str, uint32_t* out) {
     return 1;
 }
 
-static void shell_print_string_args(int argc, char** argv) {
-    for (int i = 0; i < argc; i++) {
-        terminal_write("Arg ");
-        terminal_write_decimal(i);
-        terminal_write(": ");
-        terminal_write(argv[i]);
-        terminal_write("\n");
-    }
-}
-
 static void shell_run_calc_argv(int argc, char** argv) {
     if (argc < 2) {
         colorshell_write("Usage: calc <a> <op> <b>\n", "error");
@@ -191,7 +181,6 @@ static void shell_run_calc_argv(int argc, char** argv) {
     }
 }
 
-static void cmd_help(int argc, char** argv);
 static void cmd_help_new(int argc, char ** argv);
 static void cmd_ticks(int argc, char** argv);
 static void cmd_clear(int argc, char** argv);
@@ -696,10 +685,16 @@ static void cmd_maptest(int argc, char** argv) {
     (void)argc;
     (void)argv;
 
-    uint32_t test_virt = 0xC0400000u;
+    static uint32_t test_virt = 0xE0000000u;
+
+    if (test_virt >= 0xFFC00000u) {
+        colorshell_write("Maptest address range exhausted", "error");
+        return;
+    }
 
     if (!paging_alloc_page(test_virt, PAGE_WRITABLE)) {
-        colorshell_write("Maptest failed. Could not allocate allocate page", "error");
+        colorshell_write("Maptest failed. Could not allocate page", "error");
+        return;
     }
 
     volatile uint32_t* p = (volatile uint32_t*)test_virt;
@@ -715,6 +710,7 @@ static void cmd_maptest(int argc, char** argv) {
     terminal_write_hex32(paging_translate(test_virt));
     terminal_write("\n");
 
+    test_virt += PAGE_SIZE;
 }
 
 void shell_execute_command(int argc, char** argv) {
