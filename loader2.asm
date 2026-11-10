@@ -33,10 +33,9 @@ loader2_start:
 
     mov [boot_drive], dl
 
-    ; debug: '2'
-    mov ax, 0xB800
-    mov gs, ax
-    mov word [gs:0], 0x0732
+    call serial_init
+    mov al, '2'
+    call serial_putchar
 
     call collect_e820
     call enable_a20
@@ -55,9 +54,8 @@ loader2_start:
     jc disk_error
 
 .load_done:
-    mov ax, 0xB800
-    mov gs, ax
-    mov word [gs:2], 0x074B   ; 'K'
+    mov al, 'K'
+    call serial_putchar
 
     cli
     lgdt [gdt_descriptor]
@@ -69,13 +67,48 @@ loader2_start:
     jmp CODE_SEL:protected_mode
 
 disk_error:
-    mov ax, 0xB800
-    mov gs, ax
-    mov word [gs:4], 0x0745   ; 'E'
+    mov al, 'E'
+    call serial_putchar
 .hang:
     cli
     hlt
     jmp .hang
+
+serial_init:
+    mov dx, 0x3F9
+    xor al, al
+    out dx, al
+    mov dx, 0x3FB
+    mov al, 0x80
+    out dx, al
+    mov dx, 0x3F8
+    mov al, 0x01
+    out dx, al
+    mov dx, 0x3F9
+    xor al, al
+    out dx, al
+    mov dx, 0x3FB
+    mov al, 0x03
+    out dx, al
+    mov dx, 0x3FA
+    mov al, 0xC7
+    out dx, al
+    mov dx, 0x3FC
+    mov al, 0x0B
+    out dx, al
+    ret
+
+serial_putchar:
+    push ax
+    mov dx, 0x3FD
+.wait:
+    in al, dx
+    test al, 0x20
+    jz .wait
+    pop ax
+    mov dx, 0x3F8
+    out dx, al
+    ret
 
 ; LBA Read: Read sectors from disk using int 0x13 AH=0x42 (Extended Read)
 ; Input: [dap_lba], [dap_count], [dap_seg], [dap_off], [boot_drive]
@@ -197,7 +230,8 @@ protected_mode:
     mov ss, ax
     mov esp, 0x90000
 
-    mov word [0xB8004], 0x0750   ; 'P'
+    mov al, 'P'
+    call serial_putchar32
 
     ; Copy kernel from temp low address to final physical 1 MiB
     mov esi, TEMP_KERNEL_ADDR
@@ -384,7 +418,22 @@ higher_half_entry:
     mov ss, ax
     mov esp, 0xC0090000
 
-    mov word [0xC00B8006], 0x0748   ; 'H'
+    mov al, 'H'
+    call serial_putchar32
 
     mov eax, KERNEL_VIRT_ENTRY
     jmp eax
+
+serial_putchar32:
+    push eax
+    push edx
+    mov dx, 0x3FD
+.wait:
+    in al, dx
+    test al, 0x20
+    jz .wait
+    pop edx
+    pop eax
+    mov dx, 0x3F8
+    out dx, al
+    ret

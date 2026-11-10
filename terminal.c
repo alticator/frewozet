@@ -1,19 +1,74 @@
 #include "terminal.h"
-#include "mmu.h"
 
-#define VGA_WIDTH 80
-#define VGA_HEIGHT 25
-#define VGA_MEMORY ((volatile uint16_t*)PHYS_TO_VIRT(0x000B8000))
+#define TERMINAL_WIDTH 80
+#define TERMINAL_HEIGHT 24
+#define COM1 0x3F8
+#define COM1_LINE_STATUS 5
+#define COM1_TRANSMITTER_EMPTY 0x20
 
 static size_t cursor_row;
 static size_t cursor_col;
 static uint8_t cursor_color;
-static volatile uint16_t* buffer;
 static int color_mode = 0;
 
-static inline uint16_t vga_char(unsigned char c, uint8_t color) {
-    return ((uint16_t)color << 8) | (uint16_t)c;
+static void serial_writechar(char c) {
+    while ((inb(COM1 + COM1_LINE_STATUS) & COM1_TRANSMITTER_EMPTY) == 0) {
+    }
+    outb(COM1, (uint8_t)c);
+}
 
+static void serial_write(const char* str) {
+    for (size_t i = 0; str[i] != '\0'; i++) {
+        serial_writechar(str[i]);
+    }
+}
+
+static void serial_set_color(uint8_t color) {
+    switch (color & 0x0F) {
+        case 0x0A:
+            serial_write("\033[92m");
+            break;
+        case 0x0B:
+            serial_write("\033[96m");
+            break;
+        case 0x0C:
+            serial_write("\033[91m");
+            break;
+        case 0x0D:
+            serial_write("\033[95m");
+            break;
+        case 0x0E:
+            serial_write("\033[93m");
+            break;
+        case 0x0F:
+            serial_write("\033[97m");
+            break;
+        default:
+            serial_write("\033[37m");
+            break;
+    }
+}
+
+static void terminal_update_cursor(void) {
+    char sequence[16];
+    int length = 0;
+    size_t row = cursor_row + 1;
+    size_t col = cursor_col + 1;
+
+    sequence[length++] = '\033';
+    sequence[length++] = '[';
+    if (row >= 10) {
+        sequence[length++] = (char)('0' + row / 10);
+    }
+    sequence[length++] = (char)('0' + row % 10);
+    sequence[length++] = ';';
+    if (col >= 10) {
+        sequence[length++] = (char)('0' + col / 10);
+    }
+    sequence[length++] = (char)('0' + col % 10);
+    sequence[length++] = 'H';
+    sequence[length] = '\0';
+    serial_write(sequence);
 }
 
 int terminal_get_color_mode() {
@@ -25,35 +80,34 @@ void terminal_set_color_mode(int mode) {
 }
 
 void terminal_clear() {
-    for (int y = 0; y < VGA_HEIGHT; y++) {
-        for (int x = 0; x < VGA_WIDTH; x++) {
-            buffer[x + y*VGA_WIDTH] = vga_char(' ', cursor_color);
-        }
-    }
     cursor_row = 0;
     cursor_col = 0;
+    serial_write("\033[2J\033[H");
 }
 
 void terminal_init() {
     cursor_row = 0;
     cursor_col = 0;
     cursor_color = 0x07;
-    buffer = VGA_MEMORY;
+
+    /* COM1: 115200 baud, 8 data bits, no parity, one stop bit. */
+    outb(COM1 + 1, 0x00);
+    outb(COM1 + 3, 0x80);
+    outb(COM1 + 0, 0x01);
+    outb(COM1 + 1, 0x00);
+    outb(COM1 + 3, 0x03);
+    outb(COM1 + 2, 0xC7);
+    outb(COM1 + 4, 0x0B);
+    outb(COM1 + 1, 0x01);
+
     terminal_clear();
-}
-
-static void terminal_update_cursor(void) {
-    uint16_t pos = (uint16_t)(cursor_col + cursor_row*VGA_WIDTH);
-
-    outb(0x3D4, 0x0F);
-    outb(0x3D5, (uint8_t)(pos & 0xFF));
-
-    outb(0x3D4, 0x0E);
-    outb(0x3D5, (uint8_t)((pos >> 8) & 0xFF));
 }
 
 void terminal_color(uint8_t color) {
     cursor_color = color;
+    if (color_mode) {
+        serial_set_color(color);
+    }
 }
 
 void terminal_write_uint(uint32_t value) {
@@ -131,14 +185,8 @@ static uint8_t get_colorshell_color(const char* type) {
 }
 
 static void terminal_scroll(void) {
-    for (int y = 1; y < VGA_HEIGHT; y++) {
-        for (int x = 0; x < VGA_WIDTH; x++) {
-            buffer[x + (y - 1)*VGA_WIDTH] = buffer[x + y*VGA_WIDTH];
-        }
-    }
-    for (int x = 0; x < VGA_WIDTH; x++) {
-        buffer[x + (VGA_HEIGHT - 1)*VGA_WIDTH] = vga_char(' ', cursor_color);
-    }
+    serial_write("\033[1S");
+    cursor_row = TERMINAL_HEIGHT - 1;
 }
 
 void colorshell_writechar(char c, const char* type) {
@@ -183,19 +231,23 @@ void terminal_write_decimal(int32_t value) {
 
 static void terminal_writechar_optimized(char c) {
     if (c == '\n') {
+        serial_writechar('\r');
+        serial_writechar('\n');
         cursor_row++;
         cursor_col = 0;
-        if (cursor_row >= VGA_HEIGHT) {
+        if (cursor_row >= TERMINAL_HEIGHT) {
             terminal_scroll();
-            cursor_row = VGA_HEIGHT - 1;
         }
         return;
     }
-    buffer[cursor_col + cursor_row*VGA_WIDTH] = vga_char((unsigned char)c, cursor_color);
+    serial_writechar(c);
     cursor_col++;
-    if (cursor_col >= VGA_WIDTH) {
+    if (cursor_col >= TERMINAL_WIDTH) {
         cursor_row++;
         cursor_col = 0;
+        if (cursor_row >= TERMINAL_HEIGHT) {
+            terminal_scroll();
+        }
     }
 }
 
@@ -204,9 +256,9 @@ void terminal_backspace(void) {
         cursor_col--;
     } else if (cursor_row > 0) {
         cursor_row--;
-        cursor_col = VGA_WIDTH - 1;
+        cursor_col = TERMINAL_WIDTH - 1;
     }
-    buffer[cursor_col + cursor_row*VGA_WIDTH] = vga_char(' ', cursor_color);
+    serial_write("\b \b");
     terminal_update_cursor();
 }
 
@@ -228,16 +280,16 @@ void terminal_write_line(const char *str){
 }
 
 size_t terminal_get_cursor_index(void) {
-    return cursor_row * VGA_WIDTH + cursor_col;
+    return cursor_row * TERMINAL_WIDTH + cursor_col;
 }
 
 void terminal_set_cursor_index(size_t index) {
-    if (index >= VGA_WIDTH * VGA_HEIGHT) {
-        index = VGA_WIDTH * VGA_HEIGHT - 1;
+    if (index >= TERMINAL_WIDTH * TERMINAL_HEIGHT) {
+        index = TERMINAL_WIDTH * TERMINAL_HEIGHT - 1;
     }
     
-    cursor_row = index / VGA_WIDTH;
-    cursor_col = index % VGA_WIDTH;
+    cursor_row = index / TERMINAL_WIDTH;
+    cursor_col = index % TERMINAL_WIDTH;
 
     terminal_update_cursor();
 }

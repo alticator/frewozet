@@ -19,10 +19,9 @@ start:
 
     mov [boot_drive], dl
 
-    ; debug: '1'
-    mov ax, 0xB800
-    mov gs, ax
-    mov word [gs:0], 0x0731
+    call serial_init
+    mov al, '1'
+    call serial_putchar
 
     ; load stage 2 to 0x0800:0000 = 0x00008000 using LBA
     mov ax, STAGE2_SEG
@@ -45,13 +44,48 @@ start:
     jmp STAGE2_SEG:STAGE2_OFF
 
 disk_error:
-    mov ax, 0xB800
-    mov gs, ax
-    mov word [gs:2], 0x0745   ; 'E'
+    mov al, 'E'
+    call serial_putchar
 .hang:
     cli
     hlt
     jmp .hang
+
+serial_init:
+    mov dx, 0x3F9
+    xor al, al
+    out dx, al
+    mov dx, 0x3FB
+    mov al, 0x80
+    out dx, al
+    mov dx, 0x3F8
+    mov al, 0x01
+    out dx, al
+    mov dx, 0x3F9
+    xor al, al
+    out dx, al
+    mov dx, 0x3FB
+    mov al, 0x03
+    out dx, al
+    mov dx, 0x3FA
+    mov al, 0xC7
+    out dx, al
+    mov dx, 0x3FC
+    mov al, 0x0B
+    out dx, al
+    ret
+
+serial_putchar:
+    push ax
+    mov dx, 0x3FD
+.wait:
+    in al, dx
+    test al, 0x20
+    jz .wait
+    pop ax
+    mov dx, 0x3F8
+    out dx, al
+    ret
 
 ; LBA Read: Read sectors from disk using int 0x13 AH=0x42 (Extended Read)
 ; Input: [dap_lba], [dap_count], [dap_seg], [dap_off], [boot_drive]

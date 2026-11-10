@@ -3,6 +3,7 @@
 #include "timer.h"
 #include "pic.h"
 #include "keyboard.h"
+#include "serial.h"
 #include <stdint.h>
 
 struct __attribute__((packed)) idt_entry {
@@ -174,6 +175,12 @@ void interrupt_handler(struct interrupt_frame* frame) {
     if (n == 33) {
         keyboard_handle();
         pic_send_eoi(1);
+        return;
+    }
+
+    if (n == 36) {
+        serial_handle();
+        pic_send_eoi(4);
         return;
     }
 
