@@ -13,43 +13,50 @@
 #include "pmm.h"
 #include "paging.h"
 
-
 #include <stddef.h>
 #include <stdint.h>
 
-typedef void (*shell_command_func_t)(int argc, char** argv);
+typedef void (*function)(int argc, char **argv);
 
-struct shell_command {
-    const char* name;
-    shell_command_func_t handler;
-    const char* help;
+struct shell_command
+{
+    const char *name;
+    function handler;
+    const char *help;
 };
 
-static void shell_dump_bytes(const uint8_t* data, size_t length) {
-    for (size_t i = 0; i < length; i++) {
+static void shell_dump_bytes(const uint8_t *data, size_t length)
+{
+    for (size_t i = 0; i < length; i++)
+    {
         terminal_write_hex8(data[i]);
         terminal_write(" ");
     }
     terminal_write("\n");
 }
 
-static int shell_parse_uint32(const char* str, uint32_t* out) {
+static int shell_parse_uint32(const char *str, uint32_t *out)
+{
     uint32_t value = 0;
     int found_digit = 0;
-    while (*str >= '0' && *str <= '9') {
+    while (*str >= '0' && *str <= '9')
+    {
         found_digit = 1;
         value = value * 10 + (uint32_t)(*str - '0');
         str++;
     }
-    if (!found_digit) {
+    if (!found_digit)
+    {
         return 0;
     }
     *out = value;
     return 1;
 }
 
-static void shell_run_calc_argv(int argc, char** argv) {
-    if (argc < 2) {
+static void shell_run_calc_argv(int argc, char **argv)
+{
+    if (argc < 2)
+    {
         colorshell_write("Usage: calc <a> <op> <b>\n", "error");
         colorshell_write("Example: calc 5 + 3\n", "prompt");
         return;
@@ -59,94 +66,117 @@ static void shell_run_calc_argv(int argc, char** argv) {
     uint32_t right = 0;
     char op = 0;
 
-    if (argc == 2) {
-        const char* expr = argv[1];
+    if (argc == 2)
+    {
+        const char *expr = argv[1];
         size_t i = 0;
 
-        while (expr[i] == ' ' || expr[i] == '\t') {
+        while (expr[i] == ' ' || expr[i] == '\t')
+        {
             i++;
         }
 
         size_t start = i;
-        while (expr[i] >= '0' && expr[i] <= '9') {
+        while (expr[i] >= '0' && expr[i] <= '9')
+        {
             i++;
         }
 
-        if (i == start) {
+        if (i == start)
+        {
             colorshell_write("FREWOZET CALC ERROR: Expected first number.\n", "error");
             return;
         }
 
         char left_buf[32];
         size_t left_len = i - start;
-        if (left_len >= sizeof(left_buf)) {
+        if (left_len >= sizeof(left_buf))
+        {
             colorshell_write("FREWOZET CALC ERROR: Number too long. Left buffer overflow.\n", "error");
             return;
         }
 
-        for (size_t j = 0; j < left_len; j++) {
+        for (size_t j = 0; j < left_len; j++)
+        {
             left_buf[j] = expr[start + j];
         }
         left_buf[left_len] = '\0';
 
-        while (expr[i] == ' ' || expr[i] == '\t') {
+        while (expr[i] == ' ' || expr[i] == '\t')
+        {
             i++;
         }
 
         op = expr[i];
-        if (op != '+' && op != '-' && op != '*' && op != '/' && op != '^') {
+        if (op != '+' && op != '-' && op != '*' && op != '/' && op != '^')
+        {
             colorshell_write("FREWOZET CALC ERROR: Expected operator (+, -, *, /, ^).\n", "error");
             return;
         }
         i++;
 
-        while (expr[i] == ' ' || expr[i] == '\t') {
+        while (expr[i] == ' ' || expr[i] == '\t')
+        {
             i++;
         }
 
-        const char* right_start = &expr[i];
-        if (!shell_parse_uint32(left_buf, &left) || !shell_parse_uint32(right_start, &right)) {
+        const char *right_start = &expr[i];
+        if (!shell_parse_uint32(left_buf, &left) || !shell_parse_uint32(right_start, &right))
+        {
             colorshell_write("FREWOZET CALC ERROR: Invalid number\n", "error");
             return;
         }
-    } else if (argc == 4) {
-        if (!shell_parse_uint32(argv[1], &left)) {
+    }
+    else if (argc == 4)
+    {
+        if (!shell_parse_uint32(argv[1], &left))
+        {
             colorshell_write("FREWOZET CALC ERROR: Invalid first number.\n", "error");
             return;
         }
 
-        if (strlen(argv[2]) != 1) {
+        if (strlen(argv[2]) != 1)
+        {
             colorshell_write("FREWOZET CALC ERROR: Operator must be one character.\n", "error");
             return;
         }
 
         op = argv[2][0];
-        if (op != '+' && op != '-' && op != '*' && op != '/' && op != '^') {
+        if (op != '+' && op != '-' && op != '*' && op != '/' && op != '^')
+        {
             colorshell_write("FREWOZET CALC ERROR: Expected operator (+, -, *, /, ^).\n", "error");
             return;
         }
 
-        if (!shell_parse_uint32(argv[3], &right)) {
+        if (!shell_parse_uint32(argv[3], &right))
+        {
             colorshell_write("FREWOZET CALC ERROR: Invalid second number.\n", "error");
             return;
         }
-    } else {
+    }
+    else
+    {
         colorshell_write("Usage: calc <a> <op> <b>\n", "error");
         return;
     }
 
     terminal_write("= ");
 
-    if (op == '+') {
+    if (op == '+')
+    {
         terminal_write_decimal((int)(left + right));
         terminal_write("\n");
         return;
     }
 
-    if (op == '-') {
-        if (left >= right) {
+    if (op == '-')
+    {
+        if (left >= right)
+        {
             terminal_write_decimal((int)(left - right));
-        } else {
+        }
+        else
+        {
             terminal_write("-");
             terminal_write_decimal((int)(right - left));
         }
@@ -154,14 +184,17 @@ static void shell_run_calc_argv(int argc, char** argv) {
         return;
     }
 
-    if (op == '*') {
+    if (op == '*')
+    {
         terminal_write_decimal((int)(left * right));
         terminal_write("\n");
         return;
     }
 
-    if (op == '/') {
-        if (right == 0) {
+    if (op == '/')
+    {
+        if (right == 0)
+        {
             colorshell_write("FREWOZET CALC ERROR: Division by zero.\n", "error");
             return;
         }
@@ -170,9 +203,11 @@ static void shell_run_calc_argv(int argc, char** argv) {
         return;
     }
 
-    if (op == '^') {
+    if (op == '^')
+    {
         uint32_t result = 1;
-        for (uint32_t i = 0; i < right; i++) {
+        for (uint32_t i = 0; i < right; i++)
+        {
             result *= left;
         }
         terminal_write_decimal((int)result);
@@ -181,92 +216,102 @@ static void shell_run_calc_argv(int argc, char** argv) {
     }
 }
 
-static void cmd_help_new(int argc, char ** argv);
-static void cmd_ticks(int argc, char** argv);
-static void cmd_clear(int argc, char** argv);
-static void cmd_echo(int argc, char** argv);
-static void cmd_history(int argc, char** argv);
-static void cmd_calc(int argc, char** argv);
-static void cmd_colorshell(int argc, char** argv);
-static void cmd_quit(int argc, char** argv);
-static void cmd_shutdown(int argc, char** argv);
-static void cmd_halt(int argc, char** argv);
-static void cmd_debug(int argc, char** argv);
-static void cmd_meminfo(int argc, char** argv);
-static void cmd_heap(int argc, char** argv);
-static void cmd_alloc(int argc, char** argv);
-static void cmd_pmminfo(int argc, char** argv);
+static void cmd_help_new(int argc, char **argv);
+static void cmd_ticks(int argc, char **argv);
+static void cmd_clear(int argc, char **argv);
+static void cmd_echo(int argc, char **argv);
+static void cmd_history(int argc, char **argv);
+static void cmd_calc(int argc, char **argv);
+static void cmd_colorshell(int argc, char **argv);
+static void cmd_quit(int argc, char **argv);
+static void cmd_shutdown(int argc, char **argv);
+static void cmd_halt(int argc, char **argv);
+static void cmd_debug(int argc, char **argv);
+static void cmd_meminfo(int argc, char **argv);
+static void cmd_heap(int argc, char **argv);
+static void cmd_alloc(int argc, char **argv);
+static void cmd_pmminfo(int argc, char **argv);
+static void cmd_alias(int argc, char **argv);
 // static void cmd_allocpage(int argc, char** argv);
 // static void cmd_freepage(int argc, char** argv);
-static void cmd_memcpy(int argc, char** argv);
-static void cmd_memset(int argc, char** argv);
-static void cmd_runtime(int argc, char** argv);
-static void cmd_strlen(int argc, char** argv);
-static void cmd_strcmp(int argc, char** argv);
-static void cmd_strncmp(int argc, char** argv);
-static void cmd_pageinfo(int arcg, char** argv);
-static void cmd_maptest(int argc, char** argv);
+static void cmd_memcpy(int argc, char **argv);
+static void cmd_memset(int argc, char **argv);
+static void cmd_runtime(int argc, char **argv);
+static void cmd_strlen(int argc, char **argv);
+static void cmd_strcmp(int argc, char **argv);
+static void cmd_strncmp(int argc, char **argv);
+static void cmd_pageinfo(int argc, char **argv);
+static void cmd_maptest(int argc, char **argv);
 
 static const struct shell_command shell_commands[] = {
-    {"help",       cmd_help_new,   "help                          - Show help"},
-    {"clear",      cmd_clear,      "clear                         - Clear the terminal"},
-    {"ticks",      cmd_ticks,      "ticks                         - Show timer ticks"},
-    {"echo",       cmd_echo,       "echo <message>                - Print text"},
-    {"history",    cmd_history,    "history                       - Show command history"},
-    {"calc",       cmd_calc,       "calc <a> <op> <b>             - Simple arithmetic"},
+    {"help", cmd_help_new, "help                          - Show help"},
+    {"clear", cmd_clear, "clear                         - Clear the terminal"},
+    {"ticks", cmd_ticks, "ticks                         - Show timer ticks"},
+    {"echo", cmd_echo, "echo <message>                - Print text"},
+    {"history", cmd_history, "history                       - Show command history"},
+    {"calc", cmd_calc, "calc <a> <op> <b>             - Simple arithmetic"},
     {"colorshell", cmd_colorshell, "colorshell                    - Enter ColorShell mode"},
-    {"quit",       cmd_quit,       "quit colorshell               - Exit ColorShell mode"},
-    {"shutdown",   cmd_shutdown,   "shutdown                      - Attempt shutdown"},
-    {"halt",       cmd_halt,       "halt                          - Halt the system"},
-    {"debug",      cmd_debug,      "debug dividezero              - Trigger divide error"},
-    {"meminfo",    cmd_meminfo,    "meminfo                       - Show E820 memory map"},
-    {"heap",       cmd_heap,       "heap                          - Show heap pointers"},
-    {"alloc",      cmd_alloc,      "alloc <?size>                 - Allocate memory from heap. Default 64 bytes"},
-    {"pmminfo",    cmd_pmminfo,    "pmminfo                       - Show physical memory manager info"},
+    {"quit", cmd_quit, "quit colorshell               - Exit ColorShell mode"},
+    {"shutdown", cmd_shutdown, "shutdown                      - Attempt shutdown"},
+    {"halt", cmd_halt, "halt                          - Halt the system"},
+    {"debug", cmd_debug, "debug dividezero              - Trigger divide error"},
+    {"meminfo", cmd_meminfo, "meminfo                       - Show E820 memory map"},
+    {"heap", cmd_heap, "heap                          - Show heap pointers"},
+    {"alloc", cmd_alloc, "alloc <?size>                 - Allocate memory from heap. Default 64 bytes"},
+    {"pmminfo", cmd_pmminfo, "pmminfo                       - Show physical memory manager info"},
     //{"allocpage",  cmd_allocpage,  "allocpage                     - Allocate one 4 KiB physical page"},
     //{"freepage",   cmd_freepage,   "freepage <hexaddr>            - Free one 4 KiB physical page"},
-    {"memcpy",     cmd_memcpy,     "memcpy                        - Test memcpy"},
-    {"memset",     cmd_memset,     "memset                        - Test memset"},
-    {"runtime",    cmd_runtime,    "runtime                       - Show system runtime"},
-    {"strlen",     cmd_strlen,     "strlen <string>               - String length"},
-    {"strcmp",     cmd_strcmp,     "strcmp <a> <b>                - Compare strings"},
-    {"strncmp",    cmd_strncmp,    "strncmp <a> <b> <n>           - Compare prefix"},
-    {"pageinfo",   cmd_pageinfo,   "pageinfo <virtaddr>            - Show physical mapping"},
-    {"maptest",    cmd_maptest,    "maptest                        - Map and test one page"}
-};
+    {"memcpy", cmd_memcpy, "memcpy                        - Test memcpy"},
+    {"memset", cmd_memset, "memset                        - Test memset"},
+    {"runtime", cmd_runtime, "runtime                       - Show system runtime"},
+    {"strlen", cmd_strlen, "strlen <string>               - String length"},
+    {"strcmp", cmd_strcmp, "strcmp <a> <b>                - Compare strings"},
+    {"strncmp", cmd_strncmp, "strncmp <a> <b> <n>           - Compare prefix"},
+    {"pageinfo", cmd_pageinfo, "pageinfo <virtaddr>            - Show physical mapping"},
+    {"maptest", cmd_maptest, "maptest                        - Map and test one page"},
+    {"alias", cmd_alias, "alias <name> <command>        - Create a command alias"}};
 
-static const size_t shell_command_count = sizeof(shell_commands) / sizeof(shell_commands[0]);
+static int shell_command_count = sizeof(shell_commands) / sizeof(shell_commands[0]);
 
-
-static const struct shell_command* find_command(const char* name) {
-    for (size_t i = 0; i < shell_command_count; i++) {
-        if (strcmp(shell_commands[i].name, name) == 0) {
+static const struct shell_command *find_command(const char *name)
+{
+    for (size_t i = 0; i < shell_command_count; i++)
+    {
+        if (strcmp(shell_commands[i].name, name) == 0)
+        {
             return &shell_commands[i];
         }
     }
     return NULL;
 }
 
-void register_all_commands(){
-    for (size_t i = 0; i < shell_command_count; i++){
+void register_all_commands()
+{
+    for (size_t i = 0; i < shell_command_count; i++)
+    {
         register_command(shell_commands[i].name, shell_commands[i].handler, shell_commands[i].help);
     }
 }
 
-static void cmd_help_new(int argc, char **argv){
-        if (argc == 1) {
+static void cmd_help_new(int argc, char **argv)
+{
+    if (argc == 1)
+    {
         Node **p = get_full_table();
         Node **end = p + get_table_size();
 
-        while (p < end) {
+        while (p < end)
+        {
             Node *node = *p;
-            if (!node || !node->key) {
+            if (!node || !node->key)
+            {
                 p++;
                 continue;
             }
             terminal_write_line(node->help_text);
 
-            while (node->next) {
+            while (node->next)
+            {
                 node = node->next;
                 terminal_write_line(node->help_text);
             }
@@ -274,9 +319,11 @@ static void cmd_help_new(int argc, char **argv){
         }
         return;
     }
-    Node * command = lookup_command_node(argv[1]);
-    while(command){
-        if(!strcmp(command->key, argv[1])){
+    Node *command = lookup_command_node(argv[1]);
+    while (command)
+    {
+        if (!strcmp(command->key, argv[1]))
+        {
             terminal_write_line(command->help_text);
             return;
         }
@@ -285,13 +332,15 @@ static void cmd_help_new(int argc, char **argv){
     terminal_write("Command not found\n");
 }
 
-static void cmd_clear(int argc, char** argv) {
+static void cmd_clear(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
     terminal_clear();
 }
 
-static void cmd_ticks(int argc, char** argv) {
+static void cmd_ticks(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
 
@@ -304,96 +353,139 @@ static void cmd_ticks(int argc, char** argv) {
     terminal_write("\n");
 }
 
-static void cmd_echo(int argc, char** argv) {
-    for (int i = 1; i < argc; i++) {
+static void cmd_echo(int argc, char **argv)
+{
+    for (int i = 1; i < argc; i++)
+    {
         terminal_write(argv[i]);
-        if (i < argc - 1) {
+        if (i < argc - 1)
+        {
             terminal_write(" ");
         }
     }
     terminal_write("\n");
 }
 
-static void cmd_history(int argc, char** argv) {
+static void cmd_history(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
 
     shell_history_print();
 }
 
-static void cmd_calc(int argc, char** argv) {
-    if (argc == 1) {
+static void cmd_calc(int argc, char **argv)
+{
+    if (argc == 1)
+    {
         colorshell_write("Usage: calc <a> <op> <b> \n", "error");
         return;
     }
     shell_run_calc_argv(argc, argv);
 }
 
-static void cmd_colorshell(int argc, char** argv) {
+static void cmd_colorshell(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
-    if (terminal_get_color_mode()) {
+    if (terminal_get_color_mode())
+    {
         colorshell_write("Already in ColorShell mode. Run 'quit colorshell' to exit.\n", "info");
-    } else {
+    }
+    else
+    {
         terminal_set_color_mode(1);
         colorshell_write("Welcome to Frewozet ColorShell\nRun 'quit colorshell' to exit.\n", "info");
     }
 }
 
-static void cmd_quit(int argc, char** argv) {
+static void cmd_quit(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
-    if (argc >= 2 && strcmp(argv[1], "colorshell") == 0) {
-        if (!terminal_get_color_mode()) {
+    if (argc >= 2 && strcmp(argv[1], "colorshell") == 0)
+    {
+        if (!terminal_get_color_mode())
+        {
             colorshell_write("Cannot quit ColorShell. Not in ColorShell mode.\n", "warning");
-        } else {
+        }
+        else
+        {
             terminal_set_color_mode(0);
             colorshell_write("Returned to the default shell.\n", "info");
         }
-    } else {
+    }
+    else
+    {
         colorshell_write("Usage: quit <arg>[colorshell]\n", "error");
     }
 }
 
-static void cmd_shutdown(int argc, char** argv) {
+static void cmd_shutdown(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
     colorshell_write("Shutting down...\n", "warning");
-    outw(0x604, 0x2000); // QEMU shutdown command
+    outw(0x604, 0x2000);  // QEMU shutdown command
     outw(0xB004, 0x2000); // Bochs shutdown command
     outw(0x4004, 0x3400); // VirtualBox shutdown command
     colorshell_write("FREWOZET SHELL ERROR: This system does not support shutdown.\n", "error");
     colorshell_write("The system can be halted instead with 'halt'\n", "info");
 }
 
-static void cmd_halt(int argc, char** argv) {
+static void cmd_halt(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
     colorshell_write("FREWOZET SHELL: Halt command invoked. Halting the system...\n", "warning");
-    for (;;) {
+    for (;;)
+    {
         __asm__ __volatile__("cli; hlt");
     }
 }
 
-static void cmd_debug(int argc, char** argv) {
-    if (argc >= 2 && strcmp(argv[1], "dividezero") == 0) {
+static void cmd_debug(int argc, char **argv)
+{
+    if (argc >= 2 && strcmp(argv[1], "dividezero") == 0)
+    {
         colorshell_write("FREWOZET SHELL: Debug command invoked. Triggering divide by zero...\n", "warning");
-         __asm__ __volatile__("movl $1, %eax; movl $0, %ebx; div %ebx"); // This will cause a divide error exception
-    } else {
+        __asm__ __volatile__("movl $1, %eax; movl $0, %ebx; div %ebx"); // This will cause a divide error exception
+    }
+    else
+    {
         colorshell_write("Usage: debug <arg>[dividezero]\n", "error");
     }
 }
 
-static void cmd_meminfo(int argc, char** argv) {
+static void cmd_alias(int argc, char **argv)
+{
+    if (argc < 3)
+    {
+        colorshell_write("Usage: alias <name> <command>\n", "error");
+        return;
+    }
+    const char *name = argv[1];
+    const char *command = argv[2];
+    register_command(name, find_command(command)->handler, command);
+    colorshell_write("Alias created: ", "info");
+    terminal_write(name);
+    terminal_write(" -> ");
+    terminal_write(command);
+    terminal_write("\n");
+}
+
+static void cmd_meminfo(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
 
-    if (!ram_mapper_available()) {
+    if (!ram_mapper_available())
+    {
         colorshell_write("E820 memory map not available.\n", "error");
         return;
     }
 
-    const struct e820_info* info = ram_mapper_get_info();
+    const struct e820_info *info = ram_mapper_get_info();
 
     uint64_t usable_total = 0;
     uint64_t reserved_total = 0;
@@ -406,8 +498,9 @@ static void cmd_meminfo(int argc, char** argv) {
     terminal_write_decimal((int)info->count);
     terminal_write("\n");
 
-    for (uint16_t i = 0; i < info->count; i++) {
-        const struct e820_entry* e = &info->entries[i];
+    for (uint16_t i = 0; i < info->count; i++)
+    {
+        const struct e820_entry *e = &info->entries[i];
 
         terminal_write("[");
         terminal_write_decimal((int)i);
@@ -423,25 +516,26 @@ static void cmd_meminfo(int argc, char** argv) {
         terminal_write_decimal((int)e->type);
         terminal_write(")\n");
 
-        switch (e->type) {
-            case 1:
-                usable_total += e->length;
-                break;
-            case 2:
-                reserved_total += e->length;
-                break;
-            case 3:
-                reclaim_total += e->length;
-                break;
-            case 4:
-                nvs_total += e->length;
-                break;
-            case 5:
-                bad_total += e->length;
-                break;
-            default:
-                unknown_total += e->length;
-                break;
+        switch (e->type)
+        {
+        case 1:
+            usable_total += e->length;
+            break;
+        case 2:
+            reserved_total += e->length;
+            break;
+        case 3:
+            reclaim_total += e->length;
+            break;
+        case 4:
+            nvs_total += e->length;
+            break;
+        case 5:
+            bad_total += e->length;
+            break;
+        default:
+            unknown_total += e->length;
+            break;
         }
     }
 
@@ -477,10 +571,12 @@ static void cmd_meminfo(int argc, char** argv) {
     terminal_write("\n");
 }
 
-static void cmd_heap(int argc, char** argv) {
+static void cmd_heap(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
-    if (!memory_is_pmm_backend_enabled()) {
+    if (!memory_is_pmm_backend_enabled())
+    {
         uint32_t heap_start = memory_get_heap_start();
         uint32_t heap_current = memory_get_heap_current();
         colorshell_write("Using Backend: Bootstrap\n", "info");
@@ -510,20 +606,26 @@ static void cmd_heap(int argc, char** argv) {
     terminal_write("\n");
 }
 
-static void cmd_alloc(int argc, char** argv) {
+static void cmd_alloc(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
     size_t alloc_size = 64;
-    if (argc >= 2) {
+    if (argc >= 2)
+    {
         uint32_t parsed_size;
-        if (!shell_parse_uint32(argv[1], &parsed_size)) {
+        if (!shell_parse_uint32(argv[1], &parsed_size))
+        {
             colorshell_write("Invalid size argument. Using default 64 bytes.\n", "warning");
-        } else {
+        }
+        else
+        {
             alloc_size = (size_t)parsed_size;
         }
     }
     void *ptr1 = kmalloc(alloc_size);
-    if (!ptr1) {
+    if (!ptr1)
+    {
         colorshell_write("Allocation failed\n", "error");
         return;
     }
@@ -534,7 +636,8 @@ static void cmd_alloc(int argc, char** argv) {
     terminal_write("\n");
 }
 
-static void cmd_pmminfo(int argc, char** argv) {
+static void cmd_pmminfo(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
 
@@ -558,42 +661,47 @@ static void cmd_pmminfo(int argc, char** argv) {
     terminal_write("\n");
 }
 
-static void cmd_memcpy(int argc, char** argv) {
+static void cmd_memcpy(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
     colorshell_write("Allocating source and destination buffers and copying 16 bytes...\n", "info");
-    uint8_t* src = kmalloc(16);
-    uint8_t* dest = kmalloc(16);
-    for (int i = 0; i < 16; i++) {
+    uint8_t *src = kmalloc(16);
+    uint8_t *dest = kmalloc(16);
+    for (int i = 0; i < 16; i++)
+    {
         src[i] = (uint8_t)i;
     }
     memcpy(dest, src, 16);
     colorshell_write("SRC: ", "output");
-    shell_dump_bytes((const uint8_t*)src, 16);
+    shell_dump_bytes((const uint8_t *)src, 16);
     colorshell_write("DST: ", "output");
-    shell_dump_bytes((const uint8_t*)dest, 16);
+    shell_dump_bytes((const uint8_t *)dest, 16);
     terminal_write("\n");
 }
 
-static void cmd_memset(int argc, char** argv) {
+static void cmd_memset(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
     colorshell_write("Allocating buffer and setting all bytes to 0xAB...\n", "info");
-    uint8_t* buffer = (uint8_t*)kmalloc(16);
+    uint8_t *buffer = (uint8_t *)kmalloc(16);
     memset(buffer, 0xAB, 16);
     colorshell_write("Buffer after memset: ", "output");
     shell_dump_bytes(buffer, 16);
     terminal_write("\n");
 }
 
-static void cmd_runtime(int argc, char** argv) {
+static void cmd_runtime(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
 
     uint32_t ticks = timer_get_ticks();
     uint32_t frequency = timer_get_frequency();
 
-    if (frequency == 0) {
+    if (frequency == 0)
+    {
         colorshell_write("ERROR: Timer frequency not initialized.", "error");
         return;
     }
@@ -603,11 +711,13 @@ static void cmd_runtime(int argc, char** argv) {
     uint32_t seconds = total_seconds % 60;
 
     colorshell_write("Frewozet System Runtime: ", "info");
-    if (hours > 0) {
+    if (hours > 0)
+    {
         terminal_write_decimal((int)hours);
         terminal_write(" h ");
     }
-    if (hours > 0 || minutes > 0) {
+    if (hours > 0 || minutes > 0)
+    {
         terminal_write_decimal((int)minutes);
         terminal_write(" min ");
     }
@@ -615,40 +725,47 @@ static void cmd_runtime(int argc, char** argv) {
     terminal_write(" s \n");
 }
 
-static void cmd_strlen(int argc, char** argv) {
-    if (argc < 2) {
+static void cmd_strlen(int argc, char **argv)
+{
+    if (argc < 2)
+    {
         colorshell_write("Usage: strlen <string>\n", "error");
         return;
     }
-    const char* s = argv[1];
+    const char *s = argv[1];
     size_t len = strlen(s);
     terminal_write("Length: ");
     terminal_write_decimal((int)len);
     terminal_write("\n");
 }
 
-static void cmd_strcmp(int argc, char** argv) {
-    if (argc < 3) {
+static void cmd_strcmp(int argc, char **argv)
+{
+    if (argc < 3)
+    {
         colorshell_write("Usage: strcmp <string1> <string2>\n", "error");
         return;
     }
-    const char* s1 = argv[1];
-    const char* s2 = argv[2];
+    const char *s1 = argv[1];
+    const char *s2 = argv[2];
     int result = strcmp(s1, s2);
     terminal_write("strcmp result: ");
     terminal_write_decimal(result);
     terminal_write("\n");
 }
 
-static void cmd_strncmp(int argc, char** argv) {
-    if (argc < 4) {
+static void cmd_strncmp(int argc, char **argv)
+{
+    if (argc < 4)
+    {
         colorshell_write("Usage: strncmp <string1> <string2> <n>\n", "error");
         return;
     }
-    const char* s1 = argv[1];
-    const char* s2 = argv[2];
+    const char *s1 = argv[1];
+    const char *s2 = argv[2];
     uint32_t n;
-    if (!shell_parse_uint32(argv[3], &n)) {
+    if (!shell_parse_uint32(argv[3], &n))
+    {
         colorshell_write("Invalid number for n\n", "error");
         return;
     }
@@ -658,13 +775,16 @@ static void cmd_strncmp(int argc, char** argv) {
     terminal_write("\n");
 }
 
-static void cmd_pageinfo(int argc, char** argv) {
-    if (argc < 2) {
+static void cmd_pageinfo(int argc, char **argv)
+{
+    if (argc < 2)
+    {
         colorshell_write("Usage: pageinfo <virtual address>\n", "error");
         return;
     }
     uint32_t virt = 0;
-    if (!parse_hex32(argv[1], &virt)) {
+    if (!parse_hex32(argv[1], &virt))
+    {
         colorshell_write("FREWOZET SHELL ERROR: Invalid hex address.", "error");
         return;
     }
@@ -681,23 +801,26 @@ static void cmd_pageinfo(int argc, char** argv) {
     terminal_write("\n");
 }
 
-static void cmd_maptest(int argc, char** argv) {
+static void cmd_maptest(int argc, char **argv)
+{
     (void)argc;
     (void)argv;
 
     static uint32_t test_virt = 0xE0000000u;
 
-    if (test_virt >= 0xFFC00000u) {
+    if (test_virt >= 0xFFC00000u)
+    {
         colorshell_write("Maptest address range exhausted", "error");
         return;
     }
 
-    if (!paging_alloc_page(test_virt, PAGE_WRITABLE)) {
+    if (!paging_alloc_page(test_virt, PAGE_WRITABLE))
+    {
         colorshell_write("Maptest failed. Could not allocate page", "error");
         return;
     }
 
-    volatile uint32_t* p = (volatile uint32_t*)test_virt;
+    volatile uint32_t *p = (volatile uint32_t *)test_virt;
     *p = 0x1234ABCD;
 
     terminal_write("Mapped test page at 0x");
@@ -713,14 +836,19 @@ static void cmd_maptest(int argc, char** argv) {
     test_virt += PAGE_SIZE;
 }
 
-void shell_execute_command(int argc, char** argv) {
-    if (argc == 0) {
+void shell_execute_command(int argc, char **argv)
+{
+    if (argc == 0)
+    {
         return;
     }
-    const struct shell_command* cmd = find_command(argv[0]);
-    if (cmd) {
+    const struct shell_command *cmd = find_command(argv[0]);
+    if (cmd)
+    {
         cmd->handler(argc, argv);
-    } else {
+    }
+    else
+    {
         colorshell_write("Unknown command: ", "error");
         terminal_write(argv[0]);
         terminal_write("\n");

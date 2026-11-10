@@ -10,6 +10,7 @@
 #include "calc.h"
 #include "memory.h"
 #include "string.h"
+#include "command_hashtable.h"
 
 void shell_init(void);
 void shell_handle_char(char c);
@@ -23,5 +24,12 @@ void shell_move_right(void);
 void shell_move_home(void);
 void shell_move_end(void);
 void shell_delete_forward(void);
+
+void shell_execute_recoverable(function command, int argc, char** argv);
+int shell_exception_recovery_active(void);
+uint32_t shell_exception_recovery_stack(void);
+uint32_t shell_exception_recovery_return(void);
+uint32_t shell_exception_recovery_caller_ebp(void);
+void shell_exception_recover(void);
 
 #endif

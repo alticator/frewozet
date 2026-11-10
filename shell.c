@@ -24,6 +24,10 @@ static size_t shell_saved_cursor_pos = 0;
 
 static size_t shell_prompt_start_index = 0;
 static size_t shell_last_rendered_length = 0;
+static volatile uint32_t shell_recovery_stack;
+static volatile uint32_t shell_recovery_return;
+static volatile uint32_t shell_recovery_caller_ebp;
+static volatile int shell_recovery_active;
 
 static size_t shell_prompt_length(void) {
     return strlen(SHELL_PROMPT);
@@ -33,6 +37,36 @@ static void shell_print_prompt(void) {
     shell_prompt_start_index = terminal_get_cursor_index();
     colorshell_write(SHELL_PROMPT, "prompt");
     shell_last_rendered_length = 0;
+}
+
+void shell_execute_recoverable(function command, int argc, char** argv) {
+    __asm__ __volatile__("mov %%esp, %0" : "=r"(shell_recovery_stack));
+    __asm__ __volatile__("mov (%%ebp), %%eax; mov %%eax, %0" : "=m"(shell_recovery_caller_ebp) : : "eax");
+    __asm__ __volatile__("mov 4(%%ebp), %%eax; mov %%eax, %0" : "=m"(shell_recovery_return) : : "eax");
+    shell_recovery_active = 1;
+    command(argc, argv);
+    shell_recovery_active = 0;
+}
+
+int shell_exception_recovery_active(void) {
+    return shell_recovery_active;
+}
+
+uint32_t shell_exception_recovery_stack(void) {
+    return shell_recovery_stack;
+}
+
+uint32_t shell_exception_recovery_return(void) {
+    return shell_recovery_return;
+}
+
+uint32_t shell_exception_recovery_caller_ebp(void) {
+    return shell_recovery_caller_ebp;
+}
+
+void shell_exception_recover(void) {
+    shell_recovery_active = 0;
+    terminal_write("\nReturning to the shell.\n");
 }
 
 static void shell_save_current_line(void) {
@@ -286,7 +320,7 @@ void shell_handle_char(char c) {
         char* argv[SHELL_MAX_ARGS];
         int argc = shell_tokenize(shell_buffer, argv, SHELL_MAX_ARGS);
         function command = lookup_command(argv[0]);
-        if (command) command(argc, argv);
+        if (command) shell_execute_recoverable(command, argc, argv);
         else {
             terminal_write(argv[0]);
             terminal_write_line(": No such command found");

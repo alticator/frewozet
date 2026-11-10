@@ -4,6 +4,7 @@
 #include "pic.h"
 #include "keyboard.h"
 #include "serial.h"
+#include "shell.h"
 #include <stdint.h>
 
 struct __attribute__((packed)) idt_entry {
@@ -21,6 +22,7 @@ struct __attribute__((packed)) idt_ptr {
 
 static struct idt_entry idt[256];
 static struct idt_ptr idtp;
+volatile uint32_t interrupt_recovery_pending;
 
 extern void idt_load(uint32_t idt_ptr_addr);
 extern void gdt_flush(uint32_t);
@@ -159,6 +161,28 @@ void interrupt_handler(struct interrupt_frame* frame) {
         terminal_write_hex32(frame->cs);
         terminal_write("\nExtended Flags: ");
         terminal_write_hex32(frame->eflags);
+        terminal_write("\nEAX: 0x");
+        terminal_write_hex32(frame->eax);
+        terminal_write("\nEBX: 0x");
+        terminal_write_hex32(frame->ebx);
+        terminal_write("\nECX: 0x");
+        terminal_write_hex32(frame->ecx);
+        terminal_write("\nEDX: 0x");
+        terminal_write_hex32(frame->edx);
+        terminal_write("\nESI: 0x");
+        terminal_write_hex32(frame->esi);
+        terminal_write("\nEDI: 0x");
+        terminal_write_hex32(frame->edi);
+        terminal_write("\nEBP: 0x");
+        terminal_write_hex32(frame->ebp);
+
+        if (shell_exception_recovery_active()) {
+            frame->esp = shell_exception_recovery_stack() - (6 * sizeof(uint32_t));
+            frame->eip = (uint32_t)shell_exception_recover;
+            interrupt_recovery_pending = 1;
+            return;
+        }
+
         terminal_write("\nSystem halted. Restart required.\n");
 
         for (;;) {

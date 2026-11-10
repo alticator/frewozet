@@ -5,6 +5,9 @@ section .text
 global idt_load
 
 extern interrupt_handler
+extern interrupt_recovery_pending
+extern shell_exception_recovery_return
+extern shell_exception_recovery_caller_ebp
 
 idt_load:
     mov eax, [esp + 4]
@@ -59,6 +62,28 @@ isr_common:
     pop fs
     pop es
     pop ds
+
+    cmp dword [interrupt_recovery_pending], 0
+    je .normal_return
+    mov dword [interrupt_recovery_pending], 0
+
+    ; Build an iret frame at the recovery stack selected by the C handler.
+    mov eax, [esp + 12]
+    mov edx, [esp + 40]
+    mov [eax], edx
+    mov edx, [esp + 44]
+    mov [eax + 4], edx
+    mov edx, [esp + 48]
+    mov [eax + 8], edx
+    mov ecx, eax
+    call shell_exception_recovery_return
+    mov [ecx + 12], eax
+    call shell_exception_recovery_caller_ebp
+    mov ebp, eax
+    mov esp, ecx
+    iretd
+
+.normal_return:
     popa
 
     add esp, 8
